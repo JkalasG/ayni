@@ -1,0 +1,51 @@
+# One-click deploy on Render: API + Postgres + static web build of the app.
+databases:
+  - name: ayni-db
+    plan: free
+
+services:
+  - type: web
+    name: ayni-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm ci && npx prisma generate && npx prisma db push && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: ayni-db, property: connectionString }
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PUBLIC_API_URL
+        sync: false # e.g. https://ayni-api.onrender.com
+      - key: APP_WEB_URL
+        sync: false # e.g. https://ayni-web.onrender.com
+      - key: ENABLE_DEMO_LOGIN
+        value: "true"
+      - key: ALLOW_EXPO_GO
+        value: "true"
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5-5
+
+  - type: web
+    name: ayni-web
+    runtime: static
+    rootDir: app
+    buildCommand: npm ci && npx expo export --platform web
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: EXPO_PUBLIC_API_URL
+        sync: false # e.g. https://ayni-api.onrender.com

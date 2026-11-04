@@ -1,0 +1,208 @@
+// Ayni data model. Money is always stored in integer cents (USD).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Frequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum OrderMethod {
+  LOTTERY      // sorteo tradicional
+  AI           // la IA propone, el grupo vota
+  ORGANIZER    // lo decide el organizador
+}
+
+enum GroupStatus {
+  FORMING      // aceptando miembros
+  ORDERING     // definiendo el orden de turnos
+  ACTIVE       // rondas en curso
+  FINISHED
+}
+
+enum RoundStatus {
+  UPCOMING
+  COLLECTING   // esperando aportes
+  READY        // todos pagaron (o se cubrió con retención): pozo listo
+  PAID_OUT
+}
+
+enum ContributionStatus {
+  PENDING
+  PAID
+  COVERED      // cubierto con la retención del miembro
+}
+
+enum PayoutKind {
+  POT                // pozo de la ronda
+  RETENTION_RELEASE  // devolución de la retención al final
+}
+
+enum PayoutStatus {
+  PENDING
+  SENT
+  SUCCEEDED
+  FAILED
+}
+
+enum ActionType {
+  RELEASE_POT
+  APPLY_LATE_FEE
+  SWAP_TURNS
+  APPROVE_ORDER
+}
+
+enum ActionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  AUTO_EXECUTED
+  EXECUTED
+}
+
+model User {
+  id           String       @id @default(cuid())
+  paypalUserId String       @unique
+  email        String       // PayPal email: where payouts are sent
+  name         String
+  locale       String       @default("es")
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+  organized    Group[]      @relation("organizer")
+}
+
+model Group {
+  id                     String       @id @default(cuid())
+  name                   String
+  inviteCode             String       @unique
+  organizerId            String
+  organizer              User         @relation("organizer", fields: [organizerId], references: [id])
+  contributionCents      Int
+  currency               String       @default("USD")
+  frequency              Frequency
+  orderMethod            OrderMethod
+  maxMembers             Int          @default(10)
+  lateFeePct             Int          @default(5)   // % of the contribution
+  maxRetentionPct        Int          @default(25)  // retention for turn #1, tapering to 0
+  graceHours             Int          @default(48)
+  approvalTimeoutHours   Int          @default(24)  // organizer silence => auto-execute
+  status                 GroupStatus  @default(FORMING)
+  // Demo mode: rounds last minutes instead of weeks so a full cycle fits in a video.
+  demoMode               Boolean      @default(false)
+  demoRoundMinutes       Int          @default(3)
+  startsAt               DateTime?
+  createdAt              DateTime     @default(now())
+  memberships            Membership[]
+  rounds                 Round[]
+  actions                PendingAction[]
+  messages               ChatMessage[]
+}
+
+model Membership {
+  id                 String         @id @default(cuid())
+  userId             String
+  user               User           @relation(fields: [userId], references: [id])
+  groupId            String
+  group              Group          @relation(fields: [groupId], references: [id])
+  turn               Int?           // 1-based; null until order is set
+  retentionPct       Int            @default(0)
+  retentionHeldCents Int            @default(0)  // currently withheld from their pot
+  riskScore          Int            @default(50) // 0 = safest, 100 = riskiest
+  riskReason         String?        // AI explanation, shown to the group
+  joinedAt           DateTime       @default(now())
+  contributions      Contribution[]
+  payouts            Payout[]
+  received           Round[]        @relation("recipient")
+
+  @@unique([userId, groupId])
+}
+
+model Round {
+  id            String         @id @default(cuid())
+  groupId       String
+  group         Group          @relation(fields: [groupId], references: [id])
+  number        Int
+  recipientId   String
+  recipient     Membership     @relation("recipient", fields: [recipientId], references: [id])
+  dueAt         DateTime
+  status        RoundStatus    @default(UPCOMING)
+  contributions Contribution[]
+  payouts       Payout[]
+
+  @@unique([groupId, number])
+}
+
+model Contribution {
+  id             String             @id @default(cuid())
+  roundId        String
+  round          Round              @relation(fields: [roundId], references: [id])
+  membershipId   String
+  membership     Membership         @relation(fields: [membershipId], references: [id])
+  amountCents    Int
+  lateFeeCents   Int                @default(0)
+  status         ContributionStatus @default(PENDING)
+  paypalOrderId  String?            @unique
+  paypalCaptureId String?
+  paidAt         DateTime?
+  remindersSent  Int                @default(0)
+  lastReminderAt DateTime?
+
+  @@unique([roundId, membershipId])
+}
+
+model Payout {
+  id              String       @id @default(cuid())
+  roundId         String?
+  round           Round?       @relation(fields: [roundId], references: [id])
+  membershipId    String
+  membership      Membership   @relation(fields: [membershipId], references: [id])
+  kind            PayoutKind
+  amountCents     Int
+  status          PayoutStatus @default(PENDING)
+  paypalBatchId   String?
+  paypalItemId    String?
+  createdAt       DateTime     @default(now())
+}
+
+model PendingAction {
+  id          String       @id @default(cuid())
+  groupId     String
+  group       Group        @relation(fields: [groupId], references: [id])
+  type        ActionType
+  payload     Json
+  summary     String       // human-readable, shown to the organizer
+  status      ActionStatus @default(PENDING)
+  createdBy   String       // "system" | "ai" | userId
+  expiresAt   DateTime     // after this, auto-execute
+  createdAt   DateTime     @default(now())
+  resolvedAt  DateTime?
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id])
+  userId    String?  // null => assistant / system
+  role      String   // "user" | "assistant" | "system"
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  groupId   String?
+  kind      String   // "reminder" | "pot" | "action" | "mediation"
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
