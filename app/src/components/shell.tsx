@@ -21,7 +21,7 @@ const TABS: { key: string; href: string; icon: IconName; label: Key; match: (p: 
 ];
 
 /** Screens that own the whole viewport (welcome, PayPal return, chat with its composer). */
-const NO_NAV = (p: string) => p === "/" || p.startsWith("/auth") || p.endsWith("/chat");
+const NO_NAV = (p: string) => p === "/" || p.startsWith("/auth") || p.startsWith("/demo") || p.endsWith("/chat");
 
 function useUnread() {
   const path = usePathname();

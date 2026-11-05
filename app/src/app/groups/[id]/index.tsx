@@ -8,6 +8,7 @@ import { RuleChecklist, TrustCard, type TrustProfile } from "@/components/trust"
 import { Tejido, WeaveIn, WovenFill } from "@/components/tejido";
 import { Confetti, PotCelebration } from "@/components/celebrations";
 import { Icon } from "@/components/icons";
+import { PayPalActivity, PayPalChip, type PPPayout } from "@/components/paypal";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
 import { useI18n, type Key } from "@/lib/i18n";
@@ -26,6 +27,8 @@ type Contribution = {
   status: "PENDING" | "PAID" | "COVERED" | "DEFAULTED" | "CLOSED";
   amountCents: number;
   lateFeeCents: number;
+  paidAt?: string | null;
+  paypalCaptureId?: string | null;
 };
 type JoinReq = {
   id: string;
@@ -80,10 +83,18 @@ type Group = {
   myMembershipId: string;
   isOrganizer: boolean;
   potCents: number;
+  payouts: PPPayout[];
+  paypalMode: "live" | "mock";
 };
 
 const statusColor = (c: Palette, s: Group["status"]) =>
   ({ FORMING: c.naranja.text, ORDERING: c.turquesa.text, ACTIVE: c.verde.text, FINISHED: c.muted })[s];
+
+/** The pot is the treasure: a solid gold block with dark ink, 10:1 contrast in both modes. */
+const GOLD = "#FFC93C";
+const GOLD_INK = "#1A1A3A";
+const GOLD_SOFT = "#4D3B00";
+const GOLD_ALERT = "#7A2300";
 
 const firstName = (n: string) => n.replace(/^(Doña|Don)\s+/i, "").split(" ")[0];
 
@@ -228,37 +239,37 @@ export default function GroupScreen() {
 
   /** The pot, with a bar that fills with threads as contributions come in. */
   const potCard = (
-    <SteppedBox fill={c.surface} stroke={c.line} step={6} style={{ padding: wide ? space(7) : space(5), gap: space(3) }}>
+    <SteppedBox fill={GOLD} step={6} style={{ padding: wide ? space(7) : space(5), gap: space(3) }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Icon name="pozo" size={18} color={c.amarillo.text} />
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: c.muted }}>
+          <Icon name="pozo" size={20} color={GOLD_INK} />
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: GOLD_SOFT }}>
             {current ? `${t("pot")}, ${t("round").toLowerCase()} ${current.number} ${t("of")} ${g.rounds.length}` : t("pot")}
           </Text>
         </View>
         {current && current.status === "COLLECTING" ? (
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.naranja.text }}>
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: GOLD_ALERT }}>
             {t("dueShort")} {day(current.dueAt)}
           </Text>
         ) : null}
       </View>
-      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 76 : 54, lineHeight: wide ? 84 : 62, color: c.amarillo.text, fontVariant: ["tabular-nums"], letterSpacing: -1 }}>
+      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 76 : 54, lineHeight: wide ? 84 : 62, color: GOLD_INK, fontVariant: ["tabular-nums"], letterSpacing: -1 }}>
         {money(g.potCents)}
       </Text>
       {current ? (
-        <Text style={{ fontFamily: fonts.body, fontSize: 17, color: c.ink }}>
+        <Text style={{ fontFamily: fonts.body, fontSize: 17, color: GOLD_INK }}>
           {isMyRound ? (
-            <Text style={{ fontFamily: fonts.bodyBold, color: c.fucsia.text }}>{t("youReceiveThisRound")}</Text>
+            <Text style={{ fontFamily: fonts.bodyBold, color: GOLD_INK, textDecorationLine: "underline" }}>{t("youReceiveThisRound")}</Text>
           ) : (
             <>
-              {t("thisRoundReceives")} <Text style={{ fontFamily: fonts.bodyBold, color: c.fucsia.text }}>{current.recipient.user.name}</Text>
+              {t("thisRoundReceives")} <Text style={{ fontFamily: fonts.bodyBold, color: GOLD_INK, textDecorationLine: "underline" }}>{current.recipient.user.name}</Text>
             </>
           )}
         </Text>
       ) : (
-        <P muted>
+        <Text style={{ fontFamily: fonts.body, fontSize: 16, color: GOLD_SOFT }}>
           {money(g.contributionCents)} {t(`per_${g.frequency}` as Key)}
-        </P>
+        </Text>
       )}
       {current && (
         <View style={{ gap: 8 }}>
@@ -272,19 +283,23 @@ export default function GroupScreen() {
             {[...current.contributions].sort((a, b) => Number(a.status === "PENDING") - Number(b.status === "PENDING")).map((x) => (
               <View key={x.id} style={{ flex: 1, height: 16 }}>
                 {x.status === "PENDING" ? (
-                  <View style={{ flex: 1, borderWidth: 2, borderStyle: "dashed", borderColor: c.naranja.fill }} />
+                  <View style={{ flex: 1, borderWidth: 2, borderStyle: "dashed", borderColor: GOLD_INK }} />
                 ) : (
-                  <SegmentFill fresh={!!seenPaid.current && !seenPaid.current.has(x.id)} color={x.status === "COVERED" ? c.turquesa.fill : x.status === "PAID" ? c.verde.fill : c.muted} />
+                  <SegmentFill fresh={!!seenPaid.current && !seenPaid.current.has(x.id)} color={x.status === "COVERED" ? "#06708A" : x.status === "PAID" ? GOLD_INK : GOLD_SOFT} />
                 )}
               </View>
             ))}
           </View>
-          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: c.muted }}>
+          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: GOLD_SOFT }}>
             {settled} {t("of")} {current.contributions.length} {t("contributionsIn")}
             {missing.length ? `, ${t("missing")} ${joinNames(missing, t("and"))}` : ""}
           </Text>
         </View>
       )}
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", borderTopWidth: 1, borderColor: GOLD_INK + "44", paddingTop: space(3) }}>
+        <PayPalChip mode={g.paypalMode} />
+        <Text style={{ flex: 1, minWidth: 160, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: GOLD_SOFT }}>{t("ppFlow")}</Text>
+      </View>
     </SteppedBox>
   );
 
@@ -333,6 +348,7 @@ export default function GroupScreen() {
           onPress={pay}
         />
       )}
+      {mustPay && <Text style={{ fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.muted }}>{t("ppSecure")}</Text>}
       {!mustPay && mine?.turn != null && (
         <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>
           {mine.retentionPct > 0 ? `${t("guaranteeWithheld")} ${mine.retentionPct}%` : t("noGuarantee")}
@@ -343,7 +359,7 @@ export default function GroupScreen() {
   );
 
   const weave = g.rounds.length > 0 && (
-    <View style={{ borderWidth: 1, borderColor: c.line, backgroundColor: c.surface, borderRadius: 10, padding: wide ? space(6) : space(4), gap: space(4) }}>
+    <SteppedBox fill={c.surface} stroke={c.line} step={5} style={{ padding: wide ? space(6) : space(4), gap: space(4) }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>
           {t("weaveTitle")}
@@ -351,11 +367,11 @@ export default function GroupScreen() {
         <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted }}>{t("eachThread")}</Text>
       </View>
       <Tejido rounds={g.rounds} members={g.memberships} me={g.myMembershipId} cell={wide ? 50 : 38} onRoundComplete={() => setConfetti((n) => n + 1)} />
-    </View>
+    </SteppedBox>
   );
 
   const decisions = g.isOrganizer && g.actions.length > 0 && (
-    <View style={{ borderWidth: 2, borderColor: c.fucsia.fill, backgroundColor: c.surface, borderRadius: 10, padding: space(5), gap: space(4) }}>
+    <SteppedBox fill={c.surface} stroke={c.fucsia.fill} step={5} style={{ padding: space(5), gap: space(4) }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
         <Icon name="aprobar" size={20} color={c.fucsia.text} />
         <Text accessibilityRole="header" style={{ flex: 1, fontFamily: fonts.display, fontSize: 17, color: c.ink }}>
@@ -418,7 +434,7 @@ export default function GroupScreen() {
           </View>
         </View>
       ))}
-    </View>
+    </SteppedBox>
   );
 
   const failed = g.isOrganizer && g.failedPayouts.length > 0 && (
@@ -493,6 +509,17 @@ export default function GroupScreen() {
     </View>
   );
 
+  const paypalPanel = g.status !== "FORMING" || g.payouts.length > 0 || g.rounds.length > 0 ? (
+    <PayPalActivity
+      rounds={g.rounds}
+      payouts={g.payouts}
+      nameOf={memberName}
+      mode={g.paypalMode}
+      recipientName={current && !isMyRound ? current.recipient.user.name : undefined}
+      locale={locale}
+    />
+  ) : null;
+
   const links = (
     <View style={{ borderTopWidth: 1, borderColor: c.line }}>
       <LinkRow title={t("chat")} hint={t("chatHint")} onPress={() => router.push(`/groups/${g.id}/chat`)} />
@@ -546,6 +573,7 @@ export default function GroupScreen() {
                 {payPanel}
                 {decisions}
                 {failed}
+                {paypalPanel}
                 {links}
               </View>
             </View>
@@ -572,6 +600,7 @@ export default function GroupScreen() {
         {weave}
         {!mustPay && payPanel}
         {failed}
+        {paypalPanel}
         {invite}
         {controls}
         {members}
@@ -590,7 +619,7 @@ function SegmentFill({ color, fresh }: { color: string; fresh: boolean }) {
     <View style={{ flex: 1 }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
       {w > 0 && (
         <WeaveIn fresh={fresh} delay={0}>
-          <WovenFill w={w} h={16} color={color} />
+          <View style={{ width: w, height: 16, backgroundColor: color }} />
         </WeaveIn>
       )}
     </View>

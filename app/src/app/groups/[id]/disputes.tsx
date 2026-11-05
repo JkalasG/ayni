@@ -24,7 +24,7 @@ export default function Disputes() {
     }, [id])
   );
 
-  if (error) return <Screen><P style={{ color: colors.danger }}>{error}</P></Screen>;
+  if (error) return <Screen><Stack.Screen options={{ title: t("disputes") }} /><P style={{ color: colors.danger }}>{error === "organizer_only" ? t("organizerOnly") : t("loadFailed")}</P></Screen>;
   if (!data) return <Loading />;
   return (
     <Screen>

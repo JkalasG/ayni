@@ -66,7 +66,7 @@ En modo oscuro las dos versiones son iguales. Subí un poco el fucsia y el rojo 
 | Rol | Familia | Por qué |
 |---|---|---|
 | Display: títulos, montos, celebraciones | **Unbounded** (500, 700 y 800) | Es ancha y geométrica, con terminaciones redondas. Su forma cuadrada conversa con la cuadrícula de puntadas, y en tamaño grande ("ayni" a 168 px, el pozo) tiene presencia de cartel de feria sin parecer infantil |
-| Lectura: todo lo demás | **Atkinson Hyperlegible** (400 y 700) | Está diseñada por el Braille Institute para baja visión: distingue bien la I mayúscula de la l minúscula y el 0 de la O. Pensada para Doña Rosa |
+| Lectura: todo lo demás | **Figtree** (400 y 700) | Geométrica y muy legible; sus números son limpios (sin el cero tachado de Atkinson, que en montos parecía un error de pantalla) |
 
 - Es una mezcla de las dos parejas propuestas. Unbounded con Figtree perdía legibilidad para personas mayores, y Bricolage tiene menos presencia en los montos.
 - **Cifras de ancho fijo:** verifiqué que las dos fuentes traen la función `tnum`. Los montos usan el token `tabular` (`fontVariant: ["tabular-nums"]`), para que las columnas se alineen.
@@ -193,3 +193,11 @@ Lo implemento solo si lo apruebas.
   - Los patrones y las ilustraciones están ocultos para los lectores, porque son decoración.
 - Se respeta el movimiento reducido (`useReducedMotion`).
 - Los patrones nunca van detrás de texto.
+
+## Actualización: PayPal visible y pulido
+
+- **PayPal dentro de la interfaz:** chip amarillo "PayPal · Simulado" en la bienvenida, en el pozo y en el panel de actividad del grupo (`components/paypal.tsx`). Cada línea sale de un cobro o un envío real (`paidAt`, `paypalCaptureId`, `payouts`); nada inventado.
+- **Escenario de demo** en `/demo`: 9 pasos en ~40 s con tres paneles (celular de Wara, organizadora, eventos de PayPal). Todo lleva la marca "Simulado".
+- **El pozo es un bloque dorado sólido** (`#FFC93C` con tinta `#1A1A3A`, contraste ~10:1 en ambos modos).
+- **Esquinas escalonadas en todo:** tarjetas, campos, chips, insignias y botones. El botón desactivado ya no es un rosa pálido.
+- **Pendiente = hilos sueltos** en el tejido (ya no una caja punteada tipo wireframe).

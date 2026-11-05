@@ -51,6 +51,19 @@ function LooseThreads({ w, h, color }: { w: number; h: number; color: string }) 
   );
 }
 
+/** A contribution still to be woven: thicker loose threads hanging from a bar, in the pending color. */
+function PendingThreads({ w, h, color }: { w: number; h: number; color: string }) {
+  const n = Math.max(3, Math.floor(w / 6));
+  let d = "";
+  for (let i = 1; i <= n; i++) d += `M${(i * w) / (n + 1)} 6V${i % 2 ? h - 3 : h - 8}`;
+  return (
+    <Svg width={w} height={h}>
+      <Rect x={0} y={0} width={w} height={4} fill={color} />
+      <Path d={d} stroke={color} strokeWidth={2} strokeLinecap="square" />
+    </Svg>
+  );
+}
+
 export function WeaveIn({ fresh, delay, children }: { fresh: boolean; delay: number; children: ReactElement }) {
   const reduced = useReducedMotion();
   const p = useSharedValue(fresh && !reduced ? 0 : 1);
@@ -238,7 +251,7 @@ function cellArt(state: ContributionState | "UPCOMING", w: number, h: number, th
     case "CLOSED":
       return <View style={{ width: w, height: h, borderWidth: 1.5, borderStyle: "dotted", borderColor: c.muted }} />;
     case "PENDING":
-      return <View style={{ width: w, height: h, borderWidth: 2, borderStyle: "dashed", borderColor: open ? c.naranja.fill : c.muted }} />;
+      return <PendingThreads w={w} h={h} color={open ? c.naranja.fill : c.muted} />;
     default:
       return <LooseThreads w={w} h={h} color={c.line} />;
   }
@@ -255,7 +268,7 @@ function Legend({ c, showCovered }: { c: Palette; showCovered: boolean }) {
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 18, rowGap: 8 }}>
       {item(t("paid"), <WovenFill w={20} h={14} color={c.threads[0]} />)}
-      {item(t("pending"), <View style={{ width: 20, height: 14, borderWidth: 2, borderStyle: "dashed", borderColor: c.naranja.fill }} />)}
+      {item(t("pending"), <PendingThreads w={20} h={14} color={c.naranja.fill} />)}
       {showCovered && item(t("covered"), <WovenFill w={20} h={14} color={c.turquesa.fill} />)}
       {item(t("toWeave"), <LooseThreads w={20} h={14} color={c.muted} />)}
       {item(t("receivesPot"), <View style={{ width: 20, height: 14, borderWidth: 2, borderColor: c.amarillo.fill }} />)}

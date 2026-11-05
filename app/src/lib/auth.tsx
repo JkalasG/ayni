@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
-import { API_URL, api } from "./api";
+import { API_URL, api, ApiError } from "./api";
 import { getToken, setToken } from "./session";
 import { useI18n } from "./i18n";
 import { registerForPush, unregisterPush } from "./push";
@@ -29,8 +29,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (!(await getToken())) return setMe(null);
       setMe(await api<Me>("/me"));
-    } catch {
-      await setToken(null);
+    } catch (e) {
+      // only a rejected token ends the session; a network hiccup must not log people out
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) await setToken(null);
       setMe(null);
     } finally {
       setLoading(false);

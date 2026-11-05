@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useScheme } from "@/lib/scheme";
 import { Switch, Text, View } from "react-native";
 import { Stack, router } from "expo-router";
-import { Button, Chips, Field, P, Screen } from "@/components/ui";
+import { Button, Chips, Field, FormHeader, P, Screen } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { api, ApiError } from "@/lib/api";
 import { AdmissionForm, admissionPayload, defaultAdmission } from "@/components/admission-form";
@@ -55,6 +55,7 @@ export default function NewGroup() {
   return (
     <Screen>
       <Stack.Screen options={{ title: t("create") }} />
+      <FormHeader icon="grupos" hint={t("newHint")} />
       <Field label={t("name")} value={name} onChangeText={setName} placeholder="Pasanaku de la familia" />
       <Field label={t("contribution")} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
       <Chips

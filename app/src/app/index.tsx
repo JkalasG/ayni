@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -11,11 +11,12 @@ import { Icon } from "@/components/icons";
 import { Controls } from "@/components/controls";
 import { StepButton } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
+import { PayPalChip } from "@/components/paypal";
 import { useAuth } from "@/lib/auth";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { fonts, space } from "@/lib/theme";
 
 type DemoUser = { id: string; name: string; email: string };
@@ -36,18 +37,32 @@ export default function Welcome() {
   const [demoUsers, setDemoUsers] = useState<DemoUser[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [showDemo, setShowDemo] = useState(false);
+  const [error, setError] = useState<Key | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    api<DemoUser[]>("/auth/demo/users").then(setDemoUsers).catch(() => setDemoUsers([]));
-  }, []);
+    api<DemoUser[]>("/auth/demo/users")
+      .then((u) => {
+        setDemoUsers(u);
+        setError(null);
+      })
+      .catch((e) => {
+        setDemoUsers([]);
+        // a 404 only means demo login is switched off; anything else is a connection problem
+        if (!(e instanceof ApiError)) setError("serverDown");
+      });
+  }, [attempt]);
 
   if (loading) return <Loading />;
   if (me) return <Redirect href="/groups" />;
 
   const login = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
+    setError(null);
     try {
       await fn();
+    } catch (e) {
+      setError(e instanceof ApiError ? "loginFailed" : "serverDown");
     } finally {
       setBusy(null);
     }
@@ -61,7 +76,7 @@ export default function Welcome() {
       >
         ayni
       </Text>
-      <Text style={{ fontFamily: fonts.display, fontSize: big ? 30 : 21, lineHeight: big ? 38 : 28, color: c.ink, maxWidth: big ? 520 : 300 }}>{t("ayniMotto")}</Text>
+      <Text style={{ fontFamily: fonts.display, fontSize: big ? 30 : 21, lineHeight: big ? 38 : 28, color: c.ink, maxWidth: big ? 520 : 320 }}>{t("ayniMotto").replace(", ", ",\n")}</Text>
       <Text style={{ fontFamily: fonts.body, fontSize: big ? 17 : 15, lineHeight: big ? 25 : 22, color: c.ink, maxWidth: 360 }}>{t("ayniWord")}</Text>
     </View>
   );
@@ -81,6 +96,14 @@ export default function Welcome() {
           left={<Icon name="pagar" size={20} color={c.paypalInk} />}
           onPress={() => login("pp", loginWithPayPal)}
         />
+        <StepButton
+          title={t("demoSeeIt")}
+          fill={c.surface}
+          stroke={c.line}
+          ink={c.ink}
+          left={<Icon name="rayo" size={20} color={c.ink} />}
+          onPress={() => router.push("/demo" as any)}
+        />
         {demoUsers.length > 0 && (
           <StepButton
             title={t("enterDemo")}
@@ -92,6 +115,18 @@ export default function Welcome() {
           />
         )}
       </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <PayPalChip />
+        <Text style={{ flex: 1, minWidth: 180, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>{t("ppFlow")}</Text>
+      </View>
+      {error && (
+        <View accessibilityRole="alert" style={{ gap: space(2), borderLeftWidth: 4, borderColor: c.rojo.fill, backgroundColor: c.surface, padding: space(4) }}>
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, lineHeight: 22, color: c.rojo.text }}>{t(error)}</Text>
+          <Pressable accessibilityRole="button" onPress={() => { setError(null); setAttempt((n) => n + 1); }} style={{ minHeight: 44, justifyContent: "center" }}>
+            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, color: c.ink, textDecorationLine: "underline" }}>{t("retry")}</Text>
+          </Pressable>
+        </View>
+      )}
       {showDemo && demoUsers.length > 0 && (
         <Animated.View entering={FadeIn.duration(260)} style={{ gap: space(2) }}>
           <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: c.muted }}>{t("demoPick")}</Text>
@@ -152,7 +187,7 @@ export default function Welcome() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ flexGrow: 1 }}>
       {status}
-      <Altiplano c={c} peopleHeight={150} mountainHeight={110} groundHeight={16} celestial={64} style={{ height: 480 }}>
+      <Altiplano c={c} peopleHeight={200} mountainHeight={120} groundHeight={16} celestial={64} style={{ height: 540 }}>
         <SafeAreaView edges={["top"]} style={{ paddingHorizontal: space(5), paddingTop: space(4), gap: space(6) }}>
           <View style={{ alignItems: "flex-end" }}>
             <Controls />

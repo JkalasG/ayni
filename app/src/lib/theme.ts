@@ -53,8 +53,8 @@ export const fonts = {
   display: "Unbounded_700Bold",
   displayHeavy: "Unbounded_800ExtraBold",
   displayMedium: "Unbounded_500Medium",
-  body: "AtkinsonHyperlegible_400Regular",
-  bodyBold: "AtkinsonHyperlegible_700Bold",
+  body: "Figtree_400Regular",
+  bodyBold: "Figtree_700Bold",
 };
 
 /** Different radii for different jobs: hierarchy, not one value everywhere. */

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Field, Loading, Notice } from "@/components/ui";
 import { AguayoBand, type Motif } from "@/components/aguayo";
 import { Icon } from "@/components/icons";
+import { SteppedBox } from "@/components/stepped";
 import { type AdmissionCheck, type TrustProfile } from "@/components/trust";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -196,7 +197,7 @@ export default function Explore() {
               <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: req ? c.muted : v.color }}>{req ? t(`req_${req.status}` as Key) : v.text}</Text>
             </View>
             {g.isMember ? (
-              <Button compact kind="secondary" title={t("openGroup")} onPress={() => router.push(`/groups/${g.id}`)} />
+              <Button compact kind="secondary" title={t("openGroupBtn")} onPress={() => router.push(`/groups/${g.id}`)} />
             ) : canRequest ? (
               <Button compact kind={v.ok ? "primary" : "light"} title={v.ok ? t("requestJoin") : t("seeWhatsMissing")} onPress={() => setOpen(expanded ? null : g.id)} />
             ) : null}
@@ -237,14 +238,10 @@ export default function Explore() {
             {filters.map((f) => {
               const on = filter === f.value;
               return (
-                <Pressable
-                  key={f.value}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
-                  onPress={() => setFilter(f.value)}
-                  style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: on ? c.fucsia.fill : c.line, backgroundColor: on ? c.fucsia.fill : c.surface }}
-                >
-                  <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: on ? c.onAction : c.ink }}>{f.label}</Text>
+                <Pressable key={f.value} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setFilter(f.value)}>
+                  <SteppedBox fill={on ? c.fucsia.fill : c.surface} stroke={on ? c.fucsia.fill : c.line} step={3} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 16 }}>
+                    <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: on ? c.onAction : c.ink }}>{f.label}</Text>
+                  </SteppedBox>
                 </Pressable>
               );
             })}

@@ -168,7 +168,7 @@ export function PotCelebration({
   const { c } = useScheme();
   const { width } = useWindowDimensions();
   const shown = useCountUp(amountCents, true);
-  const narrow = Math.min(width, 560);
+  const narrow = Math.max(280, Math.min(width, 560));
   const [fu, na, am, ve, tu, li] = c.threads;
 
   useEffect(() => {
@@ -217,7 +217,7 @@ export function PotCelebration({
             </View>
           )}
           <View pointerEvents="none">
-            <Cheering width={Math.min(narrow - 40, 340)} />
+            <Cheering width={Math.max(120, Math.min(narrow - 40, 340))} />
           </View>
           {streak ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: c.amarillo.fill + "22" }}>

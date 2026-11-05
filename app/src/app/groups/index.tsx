@@ -164,14 +164,18 @@ export default function Groups() {
         }
       >
         <View style={{ maxWidth: wide ? 1100 : 640, width: "100%", alignSelf: "center", gap: space(6) }}>
-          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-            <View style={{ flex: 1, gap: 4 }}>
+          <View style={{ flexDirection: wide ? "row" : "column-reverse", alignItems: wide ? "flex-start" : "stretch", justifyContent: "space-between", gap: 12 }}>
+            <View style={{ flex: wide ? 1 : undefined, gap: 4 }}>
               <Text accessibilityRole="header" style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 40 : 28, lineHeight: wide ? 46 : 34, color: c.ink, letterSpacing: -0.6 }}>
                 {t("hello")} {firstName}
               </Text>
               <Text style={{ fontFamily: fonts.body, fontSize: 16, color: c.muted }}>{t("myGroups")}</Text>
             </View>
-            {!wide && <Controls compact />}
+            {!wide && (
+              <View style={{ alignItems: "flex-end" }}>
+                <Controls compact />
+              </View>
+            )}
           </View>
 
           {groups?.length === 0 && (

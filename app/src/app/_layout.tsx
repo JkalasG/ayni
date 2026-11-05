@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts, Unbounded_500Medium, Unbounded_700Bold, Unbounded_800ExtraBold } from "@expo-google-fonts/unbounded";
-import { AtkinsonHyperlegible_400Regular, AtkinsonHyperlegible_700Bold } from "@expo-google-fonts/atkinson-hyperlegible";
+import { Figtree_400Regular, Figtree_700Bold } from "@expo-google-fonts/figtree";
 import { I18nProvider } from "@/lib/i18n";
 import { AuthProvider } from "@/lib/auth";
 import { SchemeProvider, useScheme } from "@/lib/scheme";
@@ -20,8 +20,8 @@ export default function RootLayout() {
     Unbounded_500Medium,
     Unbounded_700Bold,
     Unbounded_800ExtraBold,
-    AtkinsonHyperlegible_400Regular,
-    AtkinsonHyperlegible_700Bold,
+    Figtree_400Regular,
+    Figtree_700Bold,
   });
   useEffect(() => {
     if (loaded || error) SplashScreen.hideAsync().catch(() => {});

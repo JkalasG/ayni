@@ -9,6 +9,7 @@ import { fonts, space } from "@/lib/theme";
 import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { AguayoBand } from "@/components/aguayo";
+import { Icon, type IconName } from "@/components/icons";
 import { SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
 
@@ -39,11 +40,30 @@ export function Weave({ cell = 3, motif = "zigzag" as const }: { cell?: number; 
 /** Old name, same thing. */
 export const Stripe = (_: { height?: number }) => <Weave />;
 
-/** A panel. Radius 10 and a 1 px border: hierarchy from borders and color, never shadows. */
+/** A panel with the cloth's stepped corner. Hierarchy from borders and color, never shadows. */
 export function Card({ children, style, tone = "surface" }: { children: ReactNode; style?: ViewStyle; tone?: "surface" | "lilac" | "ink" }) {
   const { c } = useScheme();
   const bg = tone === "lilac" ? c.surfaceAlt : c.surface;
-  return <View style={[{ borderRadius: 10, padding: space(5), gap: space(3), borderWidth: 1, borderColor: c.line, backgroundColor: bg }, style]}>{children}</View>;
+  const { borderColor, ...rest } = (style ?? {}) as ViewStyle;
+  return (
+    <SteppedBox fill={bg} stroke={(borderColor as string) ?? c.line} step={4} style={{ padding: space(5), gap: space(3), ...rest }}>
+      {children}
+    </SteppedBox>
+  );
+}
+
+/** Top of a form: a woven band and one sentence saying what the screen is for. */
+export function FormHeader({ hint, icon }: { hint: string; icon: IconName }) {
+  const { c } = useScheme();
+  return (
+    <SteppedBox fill={c.surfaceAlt} step={5} style={{ overflow: "hidden" }}>
+      <Weave cell={3} motif="rombos" />
+      <View style={{ flexDirection: "row", gap: space(3), padding: space(4), alignItems: "flex-start" }}>
+        <Icon name={icon} size={28} color={c.fucsia.text} />
+        <Text style={{ flex: 1, fontFamily: fonts.body, fontSize: 15.5, lineHeight: 23, color: c.ink }}>{hint}</Text>
+      </View>
+    </SteppedBox>
+  );
 }
 
 /** Section on the page: a title, an optional aside, no box. */
@@ -118,8 +138,9 @@ export function Button({
   left?: ReactNode;
 }) {
   const { c } = useScheme();
-  const fill = { primary: c.fucsia.fill, secondary: c.surfaceAlt, paypal: c.paypal, ghost: "transparent", danger: "transparent", light: c.surface }[kind];
-  const fg = { primary: c.onAction, secondary: c.ink, paypal: c.paypalInk, ghost: c.fucsia.text, danger: c.rojo.text, light: c.ink }[kind];
+  const off = !!disabled && !loading;
+  const fill = off ? c.surfaceAlt : { primary: c.fucsia.fill, secondary: c.surfaceAlt, paypal: c.paypal, ghost: "transparent", danger: "transparent", light: c.surface }[kind];
+  const fg = off ? c.muted : { primary: c.onAction, secondary: c.ink, paypal: c.paypalInk, ghost: c.fucsia.text, danger: c.rojo.text, light: c.ink }[kind];
   const label = loading ? <ActivityIndicator color={fg} /> : <Text style={{ fontFamily: fonts.bodyBold, fontSize: compact ? 15.5 : 16.5, color: fg, textAlign: "center" }}>{title}</Text>;
   return (
     <Pressable
@@ -128,7 +149,7 @@ export function Button({
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ focused }: any) => [{ opacity: disabled ? 0.45 : 1 }, focused && ({ outlineColor: c.ink, outlineWidth: 2, outlineStyle: "solid", outlineOffset: 2 } as any)]}
+      style={({ focused }: any) => [focused && ({ outlineColor: c.ink, outlineWidth: 2, outlineStyle: "solid", outlineOffset: 2 } as any)]}
     >
       {({ pressed, hovered }: any) =>
         kind === "ghost" ? (
@@ -136,7 +157,7 @@ export function Button({
         ) : (
           <SteppedBox
             fill={fill}
-            stroke={kind === "danger" ? c.rojo.fill : kind === "light" ? c.line : undefined}
+            stroke={off ? c.line : kind === "danger" ? c.rojo.fill : kind === "light" ? c.line : undefined}
             step={4}
             style={{
               minHeight: compact ? 44 : 52,
@@ -183,26 +204,27 @@ export function Field({ label, hint, ...props }: TextInputProps & { label: strin
   return (
     <View style={{ gap: space(1.5) }}>
       <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.ink }}>{label}</Text>
-      <TextInput
-        placeholderTextColor={c.muted}
-        style={[
-          {
-            backgroundColor: c.surface,
-            borderWidth: 1.5,
-            borderColor: c.line,
-            borderRadius: 8,
-            paddingHorizontal: space(3.5),
-            paddingVertical: space(3),
-            fontSize: 16,
-            fontFamily: fonts.body,
-            color: c.ink,
-            minHeight: 48,
-          },
-          props.multiline && { minHeight: 84, textAlignVertical: "top" },
-        ]}
-        accessibilityLabel={label}
-        {...props}
-      />
+      <SteppedBox fill={c.surface} stroke={c.line} step={3} style={{ minHeight: props.multiline ? 96 : 50 }}>
+        <TextInput
+          placeholderTextColor={c.muted}
+          style={[
+            {
+              paddingHorizontal: space(4),
+              paddingVertical: space(3),
+              fontSize: 16,
+              fontFamily: fonts.body,
+              color: c.ink,
+              minHeight: props.multiline ? 96 : 50,
+              position: "relative",
+              zIndex: 1,
+            },
+            props.multiline && { textAlignVertical: "top" },
+            { outlineStyle: "none" } as any,
+          ]}
+          accessibilityLabel={label}
+          {...props}
+        />
+      </SteppedBox>
       {hint ? <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 19, color: c.muted }}>{hint}</Text> : null}
     </View>
   );
@@ -228,22 +250,10 @@ export function Chips<T extends string>({
         {options.map((o) => {
           const on = o.value === value;
           return (
-            <Pressable
-              key={o.value}
-              onPress={() => onChange(o.value)}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: on, checked: on }}
-              style={{
-                minHeight: 44,
-                justifyContent: "center",
-                paddingHorizontal: space(4),
-                borderRadius: 999,
-                borderWidth: 1.5,
-                borderColor: on ? c.fucsia.fill : c.line,
-                backgroundColor: on ? c.fucsia.fill : c.surface,
-              }}
-            >
-              <Text style={{ color: on ? c.onAction : c.ink, fontFamily: fonts.bodyBold, fontSize: 15 }}>{o.label}</Text>
+            <Pressable key={o.value} onPress={() => onChange(o.value)} accessibilityRole="radio" accessibilityState={{ selected: on, checked: on }}>
+              <SteppedBox fill={on ? c.fucsia.fill : c.surface} stroke={on ? c.fucsia.fill : c.line} step={3} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: space(4) }}>
+                <Text style={{ color: on ? c.onAction : c.ink, fontFamily: fonts.bodyBold, fontSize: 15 }}>{o.label}</Text>
+              </SteppedBox>
             </Pressable>
           );
         })}
@@ -255,10 +265,10 @@ export function Chips<T extends string>({
 /** State marker: a small stitch in the state color plus the word. Never color alone. */
 export function Badge({ text, color }: { text: string; color: string }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: color + "22", paddingHorizontal: 9, paddingVertical: 4, borderRadius: 4, alignSelf: "flex-start" }}>
+    <SteppedBox fill={color + "22"} step={2} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, alignSelf: "flex-start" }}>
       <View style={{ width: 7, height: 7, backgroundColor: color, transform: [{ rotate: "45deg" }] }} />
       <Text style={{ color, fontFamily: fonts.bodyBold, fontSize: 13 }}>{text}</Text>
-    </View>
+    </SteppedBox>
   );
 }
 

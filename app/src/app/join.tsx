@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useScheme } from "@/lib/scheme";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { Button, Field, P, Screen } from "@/components/ui";
+import { Button, Field, FormHeader, P, Screen } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
@@ -38,6 +38,7 @@ export default function Join() {
   return (
     <Screen>
       <Stack.Screen options={{ title: t("join") }} />
+      <FormHeader icon="pagar" hint={t("joinHint")} />
       <Field
         label={t("code")}
         value={code}

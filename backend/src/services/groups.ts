@@ -1,6 +1,7 @@
 /**
  * Group lifecycle: create -> join (code, or request for open groups) -> set turn order -> start.
  */
+import { config } from "../config";
 import { db } from "../db";
 import { Prisma, type AdmissionMode, type Frequency, type OrderMethod, type User } from "@prisma/client";
 import {
@@ -264,6 +265,27 @@ export async function groupDetail(user: User, groupId: string) {
       })
     : [];
 
+  // PayPal money leaving the pot. Compensations name a debt, so only the organizer and the person involved see them.
+  const payouts = (
+    await db.payout.findMany({
+      where: { membership: { groupId } },
+      include: { round: { select: { number: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    })
+  )
+    .filter((p) => p.kind !== "COMPENSATION" || isOrganizer || p.membershipId === me.id)
+    .map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      status: p.status,
+      amountCents: p.amountCents,
+      membershipId: p.membershipId,
+      round: p.round?.number ?? null,
+      paypalBatchId: p.paypalBatchId,
+      createdAt: p.createdAt,
+    }));
+
   // Privacy inside the group: others only see paid / pending (dignity).
   const mask = <T extends { membershipId: string; status: string; lateFeeCents: number }>(c: T): T =>
     isOrganizer || c.membershipId === me.id
@@ -282,6 +304,8 @@ export async function groupDetail(user: User, groupId: string) {
     actions: isOrganizer ? group.actions : [],
     myMembershipId: me.id,
     isOrganizer,
+    payouts,
+    paypalMode: config.mode,
     failedPayouts: failedPayouts.map((p) => ({ id: p.id, kind: p.kind, status: p.status, amountCents: p.amountCents, name: p.membership.user.name })),
     potCents: group.contributionCents * group.memberships.length,
     requests: requests.map((r) => ({
