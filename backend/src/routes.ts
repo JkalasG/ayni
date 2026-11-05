@@ -12,11 +12,23 @@ import {
   signState,
   type AuthedRequest,
 } from "./auth";
-import { createGroup, groupDetail, joinGroup, myGroups, setTurnOrder, startGroup, HttpError } from "./services/groups";
-import { completeContribution, startCheckout } from "./services/payments";
+import {
+  createGroup,
+  groupDetail,
+  joinGroup,
+  myGroups,
+  setTurnOrder,
+  startGroup,
+  updateAdmission,
+  HttpError,
+} from "./services/groups";
+import { completeContribution, completeInvoice, retryPayout, startCheckout } from "./services/payments";
 import { resolveAction } from "./services/actions";
 import { tickGroup } from "./services/engine";
-import { chat } from "./ai/agent";
+import { completeDeposit, exploreOpenGroups, myRequest, requestToJoin } from "./services/admission";
+import { trustProfile } from "./services/trust";
+import { groupDisputes, onDisputeCreated } from "./services/disputes";
+import { chat, summarizeDisputes } from "./ai/agent";
 
 export const router = Router();
 
@@ -25,7 +37,7 @@ const wrap = (fn: H) => (req: Request, res: Response, next: NextFunction) =>
   fn(req as AuthedRequest, res).catch(next);
 const authed = (fn: H) => [requireAuth, wrap(fn)] as const;
 
-router.get("/health", (_req, res) => res.json({ ok: true }));
+router.get("/health", (_req, res) => res.json({ ok: true, mode: config.mode }));
 
 // ---------------------------------------------------------------- auth
 
@@ -46,8 +58,8 @@ router.get(
     const info = await paypal.getUserInfo(token);
     const user = await db.user.upsert({
       where: { paypalUserId: info.userId },
-      update: { email: info.email, name: info.name },
-      create: { paypalUserId: info.userId, email: info.email, name: info.name },
+      update: { email: info.email, name: info.name, paypalVerified: true },
+      create: { paypalUserId: info.userId, email: info.email, name: info.name, paypalVerified: true },
     });
     res.redirect(appendQuery(redirect, { token: issueToken(user.id) }));
   })
@@ -76,6 +88,17 @@ router.patch(
     res.json(await db.user.update({ where: { id: req.user.id }, data: { locale } }));
   })
 );
+router.get("/me/profile", ...authed(async (req, res) => res.json(await trustProfile(req.user.id))));
+router.post(
+  "/me/push-token",
+  ...authed(async (req, res) => {
+    const { token } = z.object({ token: z.string().max(200).nullable() }).parse(req.body);
+    // one device token belongs to one account at a time
+    if (token) await db.user.updateMany({ where: { pushToken: token, id: { not: req.user.id } }, data: { pushToken: null } });
+    await db.user.update({ where: { id: req.user.id }, data: { pushToken: token } });
+    res.json({ ok: true });
+  })
+);
 
 // ---------------------------------------------------------------- groups
 
@@ -91,8 +114,59 @@ const createSchema = z.object({
   demoRoundMinutes: z.number().int().min(1).max(60).optional(),
 });
 
+const admissionSchema = z.object({
+  isOpen: z.boolean(),
+  description: z.string().max(400).nullable().optional(),
+  admissionMode: z.enum(["MANUAL", "AUTO", "AI"]).default("AI"),
+  minCompleted: z.number().int().min(0).max(50).default(0),
+  minOnTimePct: z.number().int().min(0).max(100).default(0),
+  maxLate: z.number().int().min(0).max(100).nullable().default(null),
+  acceptNewcomers: z.boolean().default(true),
+  requireDeposit: z.boolean().default(true),
+});
+
 router.get("/groups", ...authed(async (req, res) => res.json(await myGroups(req.user))));
-router.post("/groups", ...authed(async (req, res) => res.status(201).json(await createGroup(req.user, createSchema.parse(req.body)))));
+router.post(
+  "/groups",
+  ...authed(async (req, res) => {
+    const base = createSchema.parse(req.body);
+    const admission = req.body?.isOpen ? admissionSchema.parse(req.body) : {};
+    res.status(201).json(await createGroup(req.user, { ...base, ...admission }));
+  })
+);
+router.patch(
+  "/groups/:id/admission",
+  ...authed(async (req, res) => res.json(await updateAdmission(req.user, req.params.id, admissionSchema.parse(req.body))))
+);
+
+// ---------------------------------------------------------------- open pasanakus
+
+router.get("/explore", ...authed(async (req, res) => res.json(await exploreOpenGroups(req.user))));
+router.post(
+  "/groups/:id/requests",
+  ...authed(async (req, res) => {
+    const input = z.object({ message: z.string().max(500).optional(), redirect: z.string() }).parse(req.body);
+    res.status(201).json(await requestToJoin(req.user, req.params.id, input));
+  })
+);
+router.get("/requests/:id", ...authed(async (req, res) => res.json(await myRequest(req.user, req.params.id))));
+
+/** PayPal sends the applicant back here after approving the deposit hold. */
+router.get("/paypal/deposit-return", async (req, res) => {
+  let redirect = config.appWebUrl;
+  try {
+    const state = readState(String(req.query.state ?? ""));
+    redirect = state.redirect;
+    const orderId = String(req.query.token ?? "");
+    const r = await db.joinRequest.findUnique({ where: { id: state.jr } });
+    if (!r || r.paypalOrderId !== orderId) throw new Error("order_mismatch");
+    await completeDeposit(orderId);
+    res.redirect(appendQuery(redirect, { status: "deposit", request: r.id }));
+  } catch (e) {
+    console.error("deposit return failed", e);
+    res.redirect(appendQuery(redirect, { status: "error" }));
+  }
+});
 router.post(
   "/groups/join",
   ...authed(async (req, res) => res.json(await joinGroup(req.user, z.object({ code: z.string().min(4) }).parse(req.body).code)))
@@ -117,6 +191,31 @@ router.post(
     res.json({ ok: true });
   })
 );
+
+// ---------------------------------------------------------------- transparency + disputes
+
+router.get(
+  "/groups/:id/ai-log",
+  ...authed(async (req, res) => {
+    await assertMember(req.user.id, req.params.id);
+    const g = await db.group.findUniqueOrThrow({ where: { id: req.params.id } });
+    const visible =
+      g.organizerId === req.user.id ? {} : { OR: [{ audience: "group" }, { subjectUserId: req.user.id }] };
+    res.json(await db.aiLog.findMany({ where: { groupId: g.id, ...visible }, orderBy: { createdAt: "desc" }, take: 100 }));
+  })
+);
+
+router.get(
+  "/groups/:id/disputes",
+  ...authed(async (req, res) => {
+    const g = await db.group.findUnique({ where: { id: req.params.id } });
+    if (!g || g.organizerId !== req.user.id) throw new HttpError(403, "organizer_only");
+    const disputes = await groupDisputes(g.id);
+    res.json({ disputes, summary: await summarizeDisputes(g.id, disputes, req.user.locale) });
+  })
+);
+
+router.post("/payouts/:id/retry", ...authed(async (req, res) => res.json(await retryPayout(req.user, req.params.id))));
 
 // ---------------------------------------------------------------- actions
 
@@ -160,9 +259,42 @@ router.post("/paypal/webhook", async (req, res) => {
   try {
     if (!(await paypal.verifyWebhook(req.headers, req.body))) return res.status(400).end();
     const event = req.body;
+    // PayPal re-delivers events: handle each event id once (handlers are idempotent too).
+    if (event.id) {
+      const fresh = await db.webhookEvent
+        .create({ data: { id: String(event.id), type: String(event.event_type ?? "") } })
+        .then(() => true)
+        .catch(() => false);
+      if (!fresh) return res.json({ ok: true, duplicate: true });
+    }
+    try {
+      await handleWebhook(event);
+    } catch (e) {
+      // Let PayPal retry: forget we saw it.
+      if (event.id) await db.webhookEvent.delete({ where: { id: String(event.id) } }).catch(() => {});
+      throw e;
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("webhook failed", e);
+    res.status(500).end();
+  }
+});
+
+async function handleWebhook(event: any) {
+  {
     switch (event.event_type) {
       case "CHECKOUT.ORDER.APPROVED":
-        await completeContribution(event.resource.id).catch(() => undefined);
+        if (event.resource?.intent === "AUTHORIZE") await completeDeposit(event.resource.id).catch(() => undefined);
+        else await completeContribution(event.resource.id).catch(() => undefined);
+        break;
+      case "INVOICING.INVOICE.PAID": {
+        const inv = event.resource?.invoice ?? event.resource;
+        if (inv?.id) await completeInvoice(inv.id);
+        break;
+      }
+      case "CUSTOMER.DISPUTE.CREATED":
+        await onDisputeCreated(event.resource);
         break;
       case "PAYMENT.CAPTURE.COMPLETED": {
         const orderId = event.resource?.supplementary_data?.related_ids?.order_id;
@@ -174,17 +306,17 @@ router.post("/paypal/webhook", async (req, res) => {
       case "PAYMENT.PAYOUTS-ITEM.UNCLAIMED": {
         const payoutId = event.resource?.payout_item?.sender_item_id;
         const status = event.event_type.endsWith("SUCCEEDED") ? "SUCCEEDED" : "FAILED";
+        // States never go backwards: an out-of-order FAILED can't undo a SUCCEEDED.
         if (payoutId)
-          await db.payout.updateMany({ where: { id: payoutId }, data: { status, paypalItemId: event.resource.payout_item_id } });
+          await db.payout.updateMany({
+            where: { id: payoutId, status: { not: "SUCCEEDED" } },
+            data: { status, paypalItemId: event.resource.payout_item_id },
+          });
         break;
       }
     }
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("webhook failed", e);
-    res.status(500).end();
   }
-});
+}
 
 // ---------------------------------------------------------------- chat + notifications
 

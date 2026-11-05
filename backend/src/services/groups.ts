@@ -1,24 +1,37 @@
 /**
- * Group lifecycle: create -> join -> set turn order -> start.
+ * Group lifecycle: create -> join (code, or request for open groups) -> set turn order -> start.
  */
 import { db } from "../db";
-import { Prisma, type Frequency, type OrderMethod, type User } from "@prisma/client";
+import { Prisma, type AdmissionMode, type Frequency, type OrderMethod, type User } from "@prisma/client";
 import {
   adjustedRetentionPct,
   baseRetentionPct,
   generateInviteCode,
   lotteryOrder,
-  riskScore,
+  newcomerRetentionPct,
+  placeNewcomers,
   roundDueDate,
+  type TrustProfile,
 } from "../domain/rules";
 import { proposeTurnOrder } from "../ai/agent";
 import { postToGroupChat, notify } from "./notify";
+import { trustProfile } from "./trust";
+import { logAi } from "./ailog";
+import { HttpError } from "./errors";
+import { windows } from "./windows";
 
-export class HttpError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
-}
+export { HttpError };
+
+export type AdmissionSettings = {
+  isOpen: boolean;
+  description?: string | null;
+  admissionMode: AdmissionMode;
+  minCompleted: number;
+  minOnTimePct: number;
+  maxLate: number | null;
+  acceptNewcomers: boolean;
+  requireDeposit: boolean;
+};
 
 export async function createGroup(
   user: User,
@@ -32,7 +45,7 @@ export async function createGroup(
     maxRetentionPct: number;
     demoMode: boolean;
     demoRoundMinutes?: number;
-  }
+  } & Partial<AdmissionSettings>
 ) {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -52,6 +65,15 @@ export async function createGroup(
   throw new HttpError(500, "Could not generate invite code");
 }
 
+/** Publish as an open pasanaku (or close it again) and set the admission rules. */
+export async function updateAdmission(user: User, groupId: string, settings: AdmissionSettings) {
+  const group = await db.group.findUnique({ where: { id: groupId } });
+  if (!group) throw new HttpError(404, "not_found");
+  if (group.organizerId !== user.id) throw new HttpError(403, "organizer_only");
+  if (group.status !== "FORMING") throw new HttpError(409, "group_already_started");
+  return db.group.update({ where: { id: groupId }, data: settings });
+}
+
 export async function joinGroup(user: User, code: string) {
   const group = await db.group.findUnique({
     where: { inviteCode: code.trim().toUpperCase() },
@@ -66,24 +88,10 @@ export async function joinGroup(user: User, code: string) {
   return group;
 }
 
-/** Risk score from each member's history across ALL their Ayni groups. */
-async function computeRisk(userId: string) {
-  const contributions = await db.contribution.findMany({
-    where: { membership: { userId }, status: { in: ["PAID", "COVERED"] } },
-    include: { round: true },
-  });
-  let onTime = 0, late = 0, covered = 0;
-  for (const c of contributions) {
-    if (c.status === "COVERED") covered++;
-    else if (c.paidAt && c.paidAt > c.round.dueAt) late++;
-    else onTime++;
-  }
-  return { history: { onTime, late, covered }, score: riskScore({ onTime, late, covered }) };
-}
-
 /**
  * Decide the turn order. LOTTERY and ORGANIZER apply immediately.
  * AI proposes an order with reasons and waits for the organizer's approval.
+ * In every method, newcomers admitted to an open group go to the second half.
  */
 export async function setTurnOrder(user: User, groupId: string, organizerOrder?: string[]) {
   const group = await db.group.findUnique({
@@ -95,13 +103,14 @@ export async function setTurnOrder(user: User, groupId: string, organizerOrder?:
   if (group.status !== "FORMING" && group.status !== "ORDERING") throw new HttpError(409, "already_started");
   if (group.memberships.length < 2) throw new HttpError(409, "need_at_least_2_members");
 
-  // refresh risk scores
-  const risks = new Map<string, { score: number; history: { onTime: number; late: number; covered: number } }>();
+  // refresh risk scores from each member's history across all their groups
+  const profiles = new Map<string, TrustProfile>();
   for (const m of group.memberships) {
-    const r = await computeRisk(m.userId);
-    risks.set(m.id, r);
-    await db.membership.update({ where: { id: m.id }, data: { riskScore: r.score } });
+    const p = await trustProfile(m.userId);
+    profiles.set(m.id, p);
+    await db.membership.update({ where: { id: m.id }, data: { riskScore: p.riskScore } });
   }
+  const isNewcomer = (membershipId: string) => group.memberships.find((m) => m.id === membershipId)?.isNewcomer ?? false;
 
   let ordered: string[]; // membership ids
   if (group.orderMethod === "LOTTERY") {
@@ -115,49 +124,70 @@ export async function setTurnOrder(user: User, groupId: string, organizerOrder?:
     const existing = await db.pendingAction.findFirst({ where: { groupId, type: "APPROVE_ORDER", status: "PENDING" } });
     if (existing) return { proposed: true };
     const proposal = await proposeTurnOrder(
-      group.memberships.map((m) => ({
-        membershipId: m.id,
-        name: m.user.name,
-        riskScore: risks.get(m.id)!.score,
-        history: risks.get(m.id)!.history,
-      })),
+      groupId,
+      group.memberships.map((m) => {
+        const p = profiles.get(m.id)!;
+        return {
+          membershipId: m.id,
+          name: m.user.name,
+          riskScore: p.riskScore,
+          isNewcomer: m.isNewcomer,
+          history: { onTime: p.onTime, late: p.late, covered: p.covered, completed: p.completed, abandoned: p.abandoned },
+        };
+      }),
       group.memberships.find((m) => m.userId === group.organizerId)?.user.locale ?? "es"
     );
+    const order = placeNewcomers(proposal.order, isNewcomer);
     await db.pendingAction.create({
       data: {
         groupId,
         type: "APPROVE_ORDER",
-        payload: { order: proposal.order, reasons: proposal.reasons },
+        payload: { order, reasons: proposal.reasons },
         summary: proposal.summary,
         createdBy: "ai",
-        expiresAt: new Date(Date.now() + group.approvalTimeoutHours * 3600_000),
+        expiresAt: new Date(Date.now() + windows(group).approval),
       },
     });
     await db.group.update({ where: { id: groupId }, data: { status: "ORDERING" } });
-    await postToGroupChat(groupId, `🤖 ${proposal.summary}`);
+    await postToGroupChat(groupId, `${proposal.summary}`);
     return { proposed: true };
   }
 
-  await applyOrder(groupId, ordered);
+  await applyOrder(groupId, placeNewcomers(ordered, isNewcomer));
   return { proposed: false };
 }
 
-/** Persist turn numbers and the retention % for each member. */
+/** Persist turn numbers and the retention % for each member (taper + risk + newcomer extra). */
 export async function applyOrder(groupId: string, orderedMembershipIds: string[]) {
-  const group = await db.group.findUniqueOrThrow({ where: { id: groupId }, include: { memberships: true } });
+  const group = await db.group.findUniqueOrThrow({
+    where: { id: groupId },
+    include: { memberships: { include: { user: { select: { name: true } } } } },
+  });
   const n = orderedMembershipIds.length;
-  await db.$transaction(
-    orderedMembershipIds.map((id, i) => {
-      const m = group.memberships.find((x) => x.id === id)!;
-      const turn = i + 1;
-      const base = baseRetentionPct(turn, n, group.maxRetentionPct);
-      return db.membership.update({
-        where: { id },
-        data: { turn, retentionPct: adjustedRetentionPct(base, m.riskScore, group.maxRetentionPct, turn === n) },
-      });
-    })
-  );
+  const lines: string[] = [];
+  const updates = orderedMembershipIds.map((id, i) => {
+    const m = group.memberships.find((x) => x.id === id)!;
+    const turn = i + 1;
+    const last = turn === n;
+    const base = baseRetentionPct(turn, n, group.maxRetentionPct);
+    let pct = adjustedRetentionPct(base, m.riskScore, group.maxRetentionPct, last);
+    if (m.isNewcomer) pct = newcomerRetentionPct(pct, group.newcomerExtraPct, last);
+    lines.push(
+      `#${turn} ${m.user.name}: base ${base}% → ${pct}% (riesgo ${m.riskScore}/100${m.isNewcomer ? `, nuevo +${group.newcomerExtraPct}` : ""})`
+    );
+    return db.membership.update({ where: { id }, data: { turn, retentionPct: pct } });
+  });
+  await db.$transaction(updates);
   await db.group.update({ where: { id: groupId }, data: { status: "ORDERING" } });
+  await logAi({
+    groupId,
+    kind: "guarantee",
+    audience: "organizer", // risk scores are personal
+    source: "rules",
+    subject: "Garantía escalonada ajustada por riesgo",
+    consulted: group.memberships.map((m) => ({ name: m.user.name, riskScore: m.riskScore, newcomer: m.isNewcomer })),
+    output: lines.join("\n"),
+  });
 }
 
 /** Create every round and every contribution up front, then open round 1. */
@@ -180,13 +210,24 @@ export async function startGroup(user: User, groupId: string) {
           status: i === 0 ? "COLLECTING" : "UPCOMING",
           dueAt: roundDueDate(start, group.frequency, i, group.demoMode ? { minutes: group.demoRoundMinutes } : undefined),
           contributions: {
-            create: members.map((m) => ({ membershipId: m.id, amountCents: group.contributionCents })),
+            create: members.map((m) =>
+              // The admission deposit (already captured) is their round-1 contribution.
+              i === 0 && m.depositCaptureId
+                ? { membershipId: m.id, amountCents: group.contributionCents, status: "PAID" as const, paidAt: start, paypalCaptureId: m.depositCaptureId }
+                : { membershipId: m.id, amountCents: group.contributionCents }
+            ),
           },
         },
       });
     }
     await tx.group.update({ where: { id: groupId }, data: { status: "ACTIVE", startsAt: start } });
   });
+  // Cancel requests that were still waiting: the group is closed now.
+  const waiting = await db.joinRequest.findMany({ where: { groupId, status: { in: ["AWAITING_DEPOSIT", "PENDING"] } } });
+  if (waiting.length) {
+    const { rejectRequest } = await import("./admission");
+    for (const r of waiting) await rejectRequest(r.id, "full").catch((e) => console.error(e));
+  }
   for (const m of members) {
     await notify(m.userId, groupId, "action", "¡Empezó el pasanaku!", `${group.name}: tu turno es el #${m.turn}.`);
   }
@@ -208,11 +249,52 @@ export async function groupDetail(user: User, groupId: string) {
   if (!group) throw new HttpError(404, "not_found");
   const me = group.memberships.find((m) => m.userId === user.id);
   if (!me) throw new HttpError(403, "not_a_member");
+  const isOrganizer = group.organizerId === user.id;
+
+  // Join requests waiting for the organizer, with the applicant's trust profile.
+  const requestIds = group.actions.filter((a) => a.type === "ADMIT_MEMBER").map((a) => (a.payload as any).requestId as string);
+  const requests = isOrganizer && requestIds.length
+    ? await db.joinRequest.findMany({ where: { id: { in: requestIds } }, include: { user: { select: { name: true } } } })
+    : [];
+
+  const failedPayouts = isOrganizer
+    ? await db.payout.findMany({
+        where: { membership: { groupId }, status: { in: ["FAILED", "UNKNOWN"] }, retriedById: null },
+        include: { membership: { include: { user: { select: { name: true } } } } },
+      })
+    : [];
+
+  // Privacy inside the group: others only see paid / pending (dignity).
+  const mask = <T extends { membershipId: string; status: string; lateFeeCents: number }>(c: T): T =>
+    isOrganizer || c.membershipId === me.id
+      ? c
+      : { ...c, status: c.status === "COVERED" ? "PAID" : c.status === "DEFAULTED" ? "CLOSED" : c.status, lateFeeCents: 0 };
+  const rounds = group.rounds.map((r) => ({ ...r, contributions: r.contributions.map(mask) }));
+  const memberships = group.memberships.map((m) =>
+    isOrganizer || m.id === me.id ? m : { ...m, retentionHeldCents: 0, riskScore: 0, riskReason: null }
+  );
+
   return {
     ...group,
+    rounds,
+    memberships,
+    // Decisions name people (admissions, unpaid contributions): organizer only.
+    actions: isOrganizer ? group.actions : [],
     myMembershipId: me.id,
-    isOrganizer: group.organizerId === user.id,
+    isOrganizer,
+    failedPayouts: failedPayouts.map((p) => ({ id: p.id, kind: p.kind, status: p.status, amountCents: p.amountCents, name: p.membership.user.name })),
     potCents: group.contributionCents * group.memberships.length,
+    requests: requests.map((r) => ({
+      id: r.id,
+      name: r.user.name,
+      message: r.message,
+      profile: r.profile,
+      failures: r.failures,
+      meetsRules: r.meetsRules,
+      aiRecommendation: r.aiRecommendation,
+      aiReason: r.aiReason,
+      depositCents: r.authorizationId ? r.depositCents : 0,
+    })),
   };
 }
 

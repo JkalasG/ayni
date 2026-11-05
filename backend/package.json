@@ -6,13 +6,15 @@
   "license": "MIT",
   "type": "commonjs",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch src/boot.ts",
     "build": "prisma generate && tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/boot.js",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:seed": "tsx src/seed.ts",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "test:e2e": "tsx test/e2e.ts",
+    "mock:reset": "tsx src/mock/reset.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
@@ -28,6 +30,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.0",
+    "embedded-postgres": "^17.5.0-beta.15",
     "prisma": "^6.16.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

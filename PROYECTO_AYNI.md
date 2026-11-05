@@ -91,8 +91,10 @@ Ejemplo con 5 miembros, aporte de $100 y pozo de $500: el turno 1 recibe $375 y 
 |---|---|---|
 | Amable | Antes del vencimiento | Recordatorio cálido |
 | Vencido | Pasó la fecha | Recordatorio claro y se aplica la multa |
-| Firme | A mitad del período de gracia | Recordatorio firme |
-| Final | Terminó el período de gracia | Se cubre con su garantía; si no alcanza, se avisa al organizador y se abre mediación |
+| Firme | A mitad del período de gracia | Recordatorio firme y **factura de PayPal** por el aporte más la multa (se anula sola si paga por otra vía) |
+| Final | Terminó el período de gracia | Se cubre con su garantía (primero el aporte, luego la multa); si no alcanza, se avisa al organizador, se abre mediación y se crea la decisión **cerrar la ronda sin su aporte** |
+
+**Impago sin garantía suficiente.** Si el organizador cierra la ronda sin el aporte (o vence el plazo), lo que el miembro tenga de garantía va al pozo, el aporte queda como *impago* en su perfil de confianza (cuenta como pasanaku abandonado) y la deuda **se descuenta de su propio pozo** cuando le toque, para pagársela a quien recibió de menos. Así el grupo nunca queda bloqueado y el dinero cuadra.
 
 ### 4.4 Pasanakus abiertos y admisión
 
@@ -101,12 +103,14 @@ Ejemplo con 5 miembros, aporte de $100 y pozo de $500: el turno 1 recibe $375 y 
 - **Miembros nuevos:** si se aceptan, entran en turnos de la segunda mitad y con garantía adicional, para construir su reputación sin poner en riesgo al grupo.
 - **Modos de admisión:** manual, automático por reglas, o con ayuda de IA (automático si cumple; en casos límite, la IA explica y recomienda al organizador, que decide).
 - **Depósito de admisión:** la solicitud deja un monto autorizado en PayPal, no cobrado. Si se rechaza, se anula; si se acepta, se cobra como primer aporte.
+- **Silencio del organizador:** en modo IA se sigue la recomendación de la IA; en modo manual se rechaza y se anula el depósito (opción segura).
+- **Casos límite:** no cumple exactamente una regla y por poco (un pasanaku menos del mínimo, hasta 10 puntos menos de pagos a tiempo, o un atraso de más). Abandonar un pasanaku o no tener cuenta verificada nunca es caso límite.
 
 ---
 
 ## 5. Requerimientos funcionales
 
-Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sobra tiempo.
+Estado: ✅ implementado y probado · ⭐ opcional (queda en la hoja de ruta).
 
 ### Cuentas e identidad
 | ID | Requerimiento | Estado |
@@ -114,7 +118,7 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 | RF-01 | Iniciar sesión con Log in with PayPal y obtener nombre y correo verificados | ✅ |
 | RF-02 | Inicio de sesión como miembro de prueba para los jueces (activable por configuración) | ✅ |
 | RF-03 | Elegir idioma (español o inglés); el asistente responde en el idioma del usuario | ✅ |
-| RF-04 | Ver el propio perfil de confianza | 🔜 |
+| RF-04 | Ver el propio perfil de confianza | ✅ |
 
 ### Grupos
 | ID | Requerimiento | Estado |
@@ -124,9 +128,9 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 | RF-07 | Definir el orden de turnos por sorteo, por el organizador o por propuesta de la IA | ✅ |
 | RF-08 | Iniciar el pasanaku: crear todas las rondas y aportes | ✅ |
 | RF-09 | Modo demo con rondas de minutos | ✅ |
-| RF-10 | Publicar un pasanaku como abierto, con requisitos de admisión | 🔜 |
-| RF-11 | Explorar pasanakus abiertos y solicitar unirse, viendo si se cumplen los requisitos | 🔜 |
-| RF-12 | Admitir solicitudes en modo manual, automático o con recomendación de IA | 🔜 |
+| RF-10 | Publicar un pasanaku como abierto, con requisitos de admisión | ✅ |
+| RF-11 | Explorar pasanakus abiertos y solicitar unirse, viendo si se cumplen los requisitos | ✅ |
+| RF-12 | Admitir solicitudes en modo manual, automático o con recomendación de IA | ✅ |
 
 ### Pagos
 | ID | Requerimiento | Estado |
@@ -136,9 +140,9 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 | RF-15 | Enviar el pozo al ganador con Payouts, descontando su garantía | ✅ |
 | RF-16 | Devolver la garantía al terminar los aportes | ✅ |
 | RF-17 | Cubrir un aporte vencido con la garantía del miembro | ✅ |
-| RF-18 | Enviar factura de PayPal en atrasos firmes | 🔜 |
-| RF-19 | Depósito de admisión con autorización (anular o cobrar) | 🔜 |
-| RF-20 | Resumen de disputas de PayPal para el organizador | 🔜 |
+| RF-18 | Enviar factura de PayPal en atrasos firmes | ✅ |
+| RF-19 | Depósito de admisión con autorización (anular o cobrar) | ✅ |
+| RF-20 | Resumen de disputas de PayPal para el organizador | ✅ |
 | RF-21 | Aporte automático con suscripción de PayPal | ⭐ |
 
 ### Decisiones del organizador
@@ -146,6 +150,8 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 |---|---|---|
 | RF-22 | Aprobar o rechazar: envío del pozo, orden propuesto por la IA, cambios de turno | ✅ |
 | RF-23 | Ejecución automática de decisiones no respondidas dentro del plazo | ✅ |
+| RF-33 | Cerrar una ronda sin un aporte impago, con compensación posterior a quien recibió de menos | ✅ |
+| RF-34 | Reintentar envíos de PayPal que fallaron | ✅ |
 
 ### Inteligencia artificial
 | ID | Requerimiento | Estado |
@@ -155,14 +161,14 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 | RF-26 | Recordatorios personalizados y escalonados | ✅ |
 | RF-27 | Propuesta de orden de turnos con razones | ✅ |
 | RF-28 | Mediación: solicitud de cambio de turno y escalamiento al organizador | ✅ |
-| RF-29 | Recomendación de admisión con explicación | 🔜 |
-| RF-30 | Registro visible de qué consultó la IA y por qué decidió | 🔜 |
+| RF-29 | Recomendación de admisión con explicación | ✅ |
+| RF-30 | Registro visible de qué consultó la IA y por qué decidió | ✅ |
 
 ### Notificaciones
 | ID | Requerimiento | Estado |
 |---|---|---|
 | RF-31 | Avisos dentro de la app (recordatorios, pozos, decisiones, mediaciones) | ✅ |
-| RF-32 | Notificaciones push en Android | ⭐ |
+| RF-32 | Notificaciones push en Android (en el APK, con credenciales FCM; en la app quedan los avisos internos) | ✅ |
 
 ---
 
@@ -173,7 +179,7 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 | RNF-01 | **Seguridad del dinero** | La IA nunca ejecuta movimientos de dinero; solo el miembro (al pagar) o una decisión aprobada o vencida |
 | RNF-02 | **Idempotencia** | Ningún pago, envío ni decisión se ejecuta dos veces, aunque se repita una solicitud o lleguen webhooks duplicados |
 | RNF-03 | **Integridad** | Montos en centavos enteros; reglas de dinero en funciones puras con pruebas automáticas |
-| RNF-04 | **Autenticación** | Tokens firmados (JWT); el estado de los redireccionamientos va firmado y solo se permite volver a la propia app |
+| RNF-04 | **Autenticación** | Tokens firmados (JWT); el estado de los redireccionamientos va firmado y solo se permite volver a la propia app (se compara el origen exacto de la URL, no un prefijo) |
 | RNF-05 | **Verificación** | Webhooks de PayPal validados con la API de verificación de firma |
 | RNF-06 | **Privacidad y equidad** | La admisión y el riesgo usan solo el historial de pagos en Ayni; nunca datos personales sensibles |
 | RNF-07 | **Transparencia** | Cada decisión de la IA viene con una explicación en lenguaje simple |
@@ -183,6 +189,13 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 | RNF-11 | **Resiliencia** | Si la IA falla o no está configurada, se usan textos y reglas de respaldo y la app sigue funcionando |
 | RNF-12 | **Configuración** | Toda clave y URL en variables de entorno; nada sensible en el código |
 | RNF-13 | **Licencia** | Código abierto con licencia MIT, visible en el repositorio |
+| RNF-14 | **Pruebas de punta a punta** | `npm run test:e2e` corre un pasanaku completo contra un PayPal simulado y verifica que el dinero que entra es igual al que sale |
+| RNF-15 | **Sin bloqueos** | Un envío fallido o un impago nunca congelan al grupo: quedan registrados y el organizador decide o reintenta |
+| RNF-16 | **Envíos inciertos** | Si PayPal no responde (tiempo vencido o error 5xx), el envío queda "desconocido" y se reintenta solo con el mismo identificador; nunca se paga dos veces |
+| RNF-17 | **Webhooks sin duplicados** | Cada evento se procesa una vez (por su ID) y los estados nunca retroceden |
+| RNF-18 | **La IA no escribe montos** | Los recordatorios usan marcadores que llena el código; si la IA escribe un número, se repara una vez y luego se usa la plantilla |
+| RNF-19 | **Dignidad en el grupo** | El grupo solo ve "pagado / pendiente"; garantía usada, multas, impagos y perfiles de quienes solicitan entrar los ven solo la persona y el organizador |
+| RNF-20 | **Integración continua** | GitHub Actions corre tipos, pruebas de reglas y la prueba de punta a punta en cada cambio |
 
 ---
 
@@ -210,10 +223,10 @@ Estado: ✅ implementado en el esqueleto · 🔜 planeado · ⭐ opcional si sob
 | Identity (Log in with PayPal) | Login, correo verificado para los envíos y reputación anclada a una cuenta real | ✅ |
 | Orders v2 | Cobro de cada aporte, con multa incluida | ✅ |
 | Payouts | Envío del pozo menos la garantía; devolución de la garantía | ✅ |
-| Webhooks | Confirmación de pagos y estado de los envíos | ✅ |
-| Invoicing | Factura para atrasos | 🔜 |
-| Payments (autorización y anulación) | Depósito de admisión en pasanakus abiertos; reembolsos | 🔜 |
-| Disputes | Resumen de disputas para el mediador | 🔜 |
+| Webhooks | Confirmación de pagos y depósitos, estado de los envíos, facturas pagadas y disputas nuevas | ✅ |
+| Invoicing | Factura para atrasos en la etapa firme; se anula si paga por otra vía | ✅ |
+| Orders (AUTHORIZE) + Payments (captura y anulación) | Depósito de admisión en pasanakus abiertos | ✅ |
+| Disputes | Resumen de disputas para el organizador y herramienta del mediador | ✅ |
 | Agent Toolkit / MCP | Herramientas oficiales de PayPal para la IA (solo funciones seguras) | ⭐ |
 | Subscriptions + Catalog Products | Aporte automático | ⭐ |
 | Transaction Search | Conciliación del libro de cuentas | ⭐ |
@@ -264,34 +277,37 @@ ayni/
 ├── backend/
 │   ├── prisma/schema.prisma    Modelo de datos
 │   └── src/
-│       ├── domain/rules.ts     Reglas puras + pruebas
-│       ├── services/           groups, payments, actions, engine, notify
+│       ├── domain/rules.ts     Reglas puras + pruebas (garantía, riesgo, perfil, admisión)
+│       ├── services/           groups, payments, admission, trust, disputes,
+│       │                       actions, engine, notify, ailog
 │       ├── ai/agent.ts         Asistente, recordatorios, orden de turnos
 │       ├── paypal.ts           Cliente de PayPal
 │       ├── auth.ts             Sesiones y redireccionamientos seguros
 │       ├── routes.ts           Endpoints de la API
-│       └── seed.ts             Datos de demo
+│       └── seed.ts             Datos de demo (historial, grupo demo, grupo abierto)
+│   └── test/e2e.ts             Prueba de punta a punta con PayPal simulado
 └── app/
     └── src/
         ├── app/                Pantallas (Expo Router)
-        ├── components/ui.tsx   Componentes visuales
-        └── lib/                API, sesión, pagos, idiomas, tema
+        ├── components/         ui, perfil de confianza, formulario de admisión
+        └── lib/                API, sesión, pagos, push, idiomas, tema
 ```
 
 ### 8.3 Modelo de datos
 
 | Entidad | Contenido principal |
 |---|---|
-| **User** | Identificador de PayPal, correo, nombre, idioma |
-| **Group** | Nombre, código, organizador, aporte, frecuencia, método de orden, multa, garantía máxima, plazos, estado, modo demo |
-| **Membership** | Usuario en un grupo: turno, porcentaje de garantía, garantía retenida, puntaje de riesgo |
+| **User** | Identificador de PayPal, correo, nombre, idioma, cuenta verificada, token push |
+| **Group** | Nombre, código, organizador, aporte, frecuencia, método de orden, multa, garantía máxima, plazos, estado, modo demo; si es abierto: descripción, modo de admisión, requisitos, si acepta nuevos, depósito |
+| **Membership** | Usuario en un grupo: turno, porcentaje de garantía, garantía retenida, puntaje de riesgo, si es nuevo, depósito capturado |
 | **Round** | Número, ganador, fecha de vencimiento, estado |
-| **Contribution** | Aporte de un miembro en una ronda: monto, multa, estado, orden de PayPal, recordatorios enviados |
-| **Payout** | Envío del pozo o devolución de garantía, con el lote de PayPal |
+| **Contribution** | Aporte de un miembro en una ronda: monto, multa, estado (pendiente, pagado, cubierto, impago), orden y factura de PayPal, recordatorios, lo recuperado y compensado |
+| **Payout** | Envío del pozo, devolución de garantía o compensación, con el lote de PayPal y su reintento |
 | **PendingAction** | Decisión que espera al organizador, con plazo de ejecución automática |
 | **ChatMessage** | Mensajes del grupo, del asistente y del sistema |
 | **Notification** | Avisos para cada usuario |
-| *JoinRequest* (🔜) | Solicitud de admisión: perfil evaluado, recomendación de IA, depósito autorizado, estado |
+| **JoinRequest** | Solicitud de admisión: perfil evaluado, reglas no cumplidas, caso límite, recomendación de IA, depósito autorizado, estado |
+| **AiLog** | Registro de la IA: tipo de decisión, fuente (Claude, reglas o respaldo), qué consultó y qué decidió |
 
 ### 8.4 API principal
 
@@ -307,6 +323,14 @@ ayni/
 | `POST /actions/:id/approve` y `/reject` | Decisiones del organizador |
 | `GET/POST /groups/:id/chat` | Chat con el asistente |
 | `GET /notifications` | Avisos |
+| `GET /me/profile`, `POST /me/push-token` | Perfil de confianza propio y registro del celular |
+| `PATCH /groups/:id/admission` | Publicar como abierto y definir requisitos |
+| `GET /explore` | Pasanakus abiertos con cupo y si cumplo cada uno |
+| `POST /groups/:id/requests`, `GET /requests/:id` | Solicitar unirse (con depósito) y ver la solicitud |
+| `GET /paypal/deposit-return` | Regreso de PayPal tras autorizar el depósito |
+| `GET /groups/:id/ai-log` | Registro de la IA del grupo |
+| `GET /groups/:id/disputes` | Disputas de PayPal del grupo con resumen de la IA |
+| `POST /payouts/:id/retry` | Reintentar un envío fallido |
 
 ---
 

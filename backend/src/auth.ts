@@ -26,9 +26,19 @@ export function readState(state: string): Record<string, string> {
  * or Expo Go during development. Prevents open redirects.
  */
 export function isAllowedRedirect(url: string): boolean {
-  if (url.startsWith(`${config.appScheme}://`)) return true;
-  if (url.startsWith(config.appWebUrl)) return true;
-  if (config.allowExpoGoRedirects && (url.startsWith("exp://") || url.startsWith("http://localhost"))) return true;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  // Compare parsed origins, never string prefixes: "https://app.com.evil.com" must not pass.
+  if (u.protocol === `${config.appScheme}:`) return true;
+  if (u.origin === new URL(config.appWebUrl).origin) return true;
+  if (config.allowExpoGoRedirects) {
+    if (u.protocol === "exp:") return true;
+    if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1")) return true;
+  }
   return false;
 }
 

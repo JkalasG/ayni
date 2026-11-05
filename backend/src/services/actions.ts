@@ -5,8 +5,10 @@
  */
 import { db } from "../db";
 import type { PendingAction, User } from "@prisma/client";
-import { HttpError, applyOrder } from "./groups";
-import { releasePot } from "./payments";
+import { HttpError } from "./errors";
+import { applyOrder } from "./groups";
+import { releasePot, waiveContribution } from "./payments";
+import { acceptRequest, rejectRequest } from "./admission";
 import { postToGroupChat } from "./notify";
 
 export async function resolveAction(user: User, actionId: string, approve: boolean) {
@@ -16,8 +18,14 @@ export async function resolveAction(user: User, actionId: string, approve: boole
   if (action.status !== "PENDING") throw new HttpError(409, "already_resolved");
 
   if (!approve) {
-    await db.pendingAction.update({ where: { id: action.id }, data: { status: "REJECTED", resolvedAt: new Date() } });
-    await postToGroupChat(action.groupId, `❌ El organizador rechazó: ${action.summary}`);
+    const claim = await db.pendingAction.updateMany({
+      where: { id: action.id, status: "PENDING" },
+      data: { status: "REJECTED", resolvedAt: new Date() },
+    });
+    if (claim.count === 0) throw new HttpError(409, "already_resolved");
+    if (action.type === "ADMIT_MEMBER") await rejectRequest((action.payload as any).requestId, "organizer");
+    // A rejected pot release is asked again by the engine after one approval window.
+    await postToGroupChat(action.groupId, `El organizador rechazó: ${action.summary}`);
     return;
   }
   await execute(action, "APPROVED");
@@ -38,17 +46,25 @@ export async function execute(action: PendingAction, finalStatus: "APPROVED" | "
       break;
     case "APPROVE_ORDER":
       await applyOrder(action.groupId, payload.order);
-      await postToGroupChat(action.groupId, "📋 Orden de turnos confirmado. El organizador ya puede iniciar el pasanaku.");
+      await postToGroupChat(action.groupId, "Orden de turnos confirmado. El organizador ya puede iniciar el pasanaku.");
       break;
     case "SWAP_TURNS":
       await swapTurns(action.groupId, payload.a, payload.b);
+      break;
+    case "ADMIT_MEMBER":
+      // Approved by the organizer = accept. Silence = follow the AI recommendation (manual mode: reject).
+      if (finalStatus === "APPROVED" || payload.autoDecision === "accept") await acceptRequest(payload.requestId);
+      else await rejectRequest(payload.requestId, "timeout");
+      break;
+    case "WAIVE_CONTRIBUTION":
+      await waiveContribution(payload.contributionId);
       break;
     case "APPLY_LATE_FEE":
       // late fees are applied automatically by the group rules; kept for future manual fees
       break;
   }
   if (finalStatus === "AUTO_EXECUTED") {
-    await postToGroupChat(action.groupId, `⏱️ Se ejecutó automáticamente (sin respuesta del organizador): ${action.summary}`);
+    await postToGroupChat(action.groupId, `Se ejecutó automáticamente (sin respuesta del organizador): ${action.summary}`);
   }
 }
 
@@ -57,8 +73,10 @@ async function swapTurns(groupId: string, membershipA: string, membershipB: stri
   const rounds = await db.round.findMany({
     where: { groupId, recipientId: { in: [membershipA, membershipB] } },
   });
-  if (rounds.length !== 2 || rounds.some((r) => r.status === "PAID_OUT" || r.status === "READY"))
-    throw new HttpError(409, "cannot_swap_after_payout");
+  if (rounds.length !== 2 || rounds.some((r) => r.status === "PAID_OUT" || r.status === "READY")) {
+    await postToGroupChat(groupId, "No se pudo cambiar los turnos: uno de los dos ya recibió (o está por recibir) el pozo.");
+    return;
+  }
   const [ra, rb] = rounds;
   const ma = await db.membership.findUniqueOrThrow({ where: { id: ra.recipientId } });
   const mb = await db.membership.findUniqueOrThrow({ where: { id: rb.recipientId } });
@@ -68,5 +86,5 @@ async function swapTurns(groupId: string, membershipA: string, membershipB: stri
     db.membership.update({ where: { id: ma.id }, data: { turn: mb.turn, retentionPct: mb.retentionPct } }),
     db.membership.update({ where: { id: mb.id }, data: { turn: ma.turn, retentionPct: ma.retentionPct } }),
   ]);
-  await postToGroupChat(groupId, "🔄 Cambio de turnos aplicado.");
+  await postToGroupChat(groupId, "Cambio de turnos aplicado.");
 }

@@ -1,15 +1,18 @@
 import { useState } from "react";
+import { useScheme } from "@/lib/scheme";
 import { Switch, Text, View } from "react-native";
 import { Stack, router } from "expo-router";
 import { Button, Chips, Field, P, Screen } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { api, ApiError } from "@/lib/api";
-import { colors } from "@/lib/theme";
+import { AdmissionForm, admissionPayload, defaultAdmission } from "@/components/admission-form";
+import { colors, fonts } from "@/lib/theme";
 
 type Freq = "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 type Method = "LOTTERY" | "AI" | "ORGANIZER";
 
 export default function NewGroup() {
+  useScheme(); // re-render when the color mode changes
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("20");
@@ -19,6 +22,7 @@ export default function NewGroup() {
   const [lateFee, setLateFee] = useState("5");
   const [maxRetention, setMaxRetention] = useState("25");
   const [demoMode, setDemoMode] = useState(true);
+  const [admission, setAdmission] = useState(defaultAdmission);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +41,7 @@ export default function NewGroup() {
           maxRetentionPct: parseInt(maxRetention, 10),
           demoMode,
           demoRoundMinutes: demoMode ? 4 : undefined,
+          ...(admission.isOpen ? admissionPayload(admission) : {}),
         },
       });
       router.replace(`/groups/${g.id}`);
@@ -68,9 +73,10 @@ export default function NewGroup() {
       <Field label={t("lateFee")} value={lateFee} onChangeText={setLateFee} keyboardType="number-pad" />
       <Field label={t("maxRetention")} value={maxRetention} onChangeText={setMaxRetention} keyboardType="number-pad" />
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ color: colors.ink, fontWeight: "600", flex: 1 }}>{t("demoMode")}</Text>
+        <Text style={{ color: colors.ink, fontFamily: fonts.bodyBold, flex: 1 }}>{t("demoMode")}</Text>
         <Switch value={demoMode} onValueChange={setDemoMode} trackColor={{ true: colors.primary }} />
       </View>
+      <AdmissionForm value={admission} onChange={setAdmission} />
       {error && <P style={{ color: colors.danger }}>{error}</P>}
       <Button title={t("save")} onPress={submit} loading={busy} disabled={name.trim().length < 2} />
     </Screen>

@@ -16,41 +16,58 @@ enum Frequency {
 }
 
 enum OrderMethod {
-  LOTTERY      // sorteo tradicional
-  AI           // la IA propone, el grupo vota
-  ORGANIZER    // lo decide el organizador
+  LOTTERY // sorteo tradicional
+  AI // la IA propone, el grupo vota
+  ORGANIZER // lo decide el organizador
 }
 
 enum GroupStatus {
-  FORMING      // aceptando miembros
-  ORDERING     // definiendo el orden de turnos
-  ACTIVE       // rondas en curso
+  FORMING // aceptando miembros
+  ORDERING // definiendo el orden de turnos
+  ACTIVE // rondas en curso
   FINISHED
 }
 
 enum RoundStatus {
   UPCOMING
-  COLLECTING   // esperando aportes
-  READY        // todos pagaron (o se cubrió con retención): pozo listo
+  COLLECTING // esperando aportes
+  READY // todos pagaron (o se cubrió con retención): pozo listo
   PAID_OUT
 }
 
 enum ContributionStatus {
   PENDING
   PAID
-  COVERED      // cubierto con la retención del miembro
+  COVERED // cubierto con la retención del miembro
+  DEFAULTED // no pagó y su garantía no alcanzó: el grupo lo absorbió (cuenta como abandono)
+}
+
+enum AdmissionMode {
+  MANUAL // el organizador decide cada solicitud
+  AUTO // se acepta si cumple las reglas, se rechaza si no
+  AI // automático si cumple; en casos límite la IA recomienda y el organizador decide
+}
+
+enum JoinRequestStatus {
+  AWAITING_DEPOSIT // falta autorizar el depósito en PayPal
+  PENDING // esperando decisión
+  ACCEPTED
+  REJECTED
+  CANCELLED
 }
 
 enum PayoutKind {
-  POT                // pozo de la ronda
-  RETENTION_RELEASE  // devolución de la retención al final
+  POT // pozo de la ronda
+  RETENTION_RELEASE // devolución de la retención al final
+  COMPENSATION // deuda de quien no pagó, descontada de su pozo y pagada a quien recibió de menos
 }
 
 enum PayoutStatus {
   PENDING
   SENT
   SUCCEEDED
-  FAILED
+  FAILED // PayPal answered with an error: safe to send again as a NEW payout
+  UNKNOWN // timeout / network / 5xx: PayPal may have it. Retry ONLY with the same sender_batch_id
 }
 
 enum ActionType {
@@ -58,6 +75,8 @@ enum ActionType {
   APPLY_LATE_FEE
   SWAP_TURNS
   APPROVE_ORDER
+  ADMIT_MEMBER // solicitud de un pasanaku abierto
+  WAIVE_CONTRIBUTION // aporte impago sin garantía suficiente: liberar el pozo sin él
 }
 
 enum ActionStatus {
@@ -69,41 +88,56 @@ enum ActionStatus {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  paypalUserId String       @unique
-  email        String       // PayPal email: where payouts are sent
-  name         String
-  locale       String       @default("es")
-  createdAt    DateTime     @default(now())
-  memberships  Membership[]
-  organized    Group[]      @relation("organizer")
+  id             String        @id @default(cuid())
+  paypalUserId   String        @unique
+  email          String // PayPal email: where payouts are sent
+  name           String
+  locale         String        @default("es")
+  paypalVerified Boolean       @default(false) // logged in with a real PayPal account
+  pushToken      String? // Expo push token (Android)
+  createdAt      DateTime      @default(now())
+  memberships    Membership[]
+  organized      Group[]       @relation("organizer")
+  joinRequests   JoinRequest[]
 }
 
 model Group {
-  id                     String       @id @default(cuid())
-  name                   String
-  inviteCode             String       @unique
-  organizerId            String
-  organizer              User         @relation("organizer", fields: [organizerId], references: [id])
-  contributionCents      Int
-  currency               String       @default("USD")
-  frequency              Frequency
-  orderMethod            OrderMethod
-  maxMembers             Int          @default(10)
-  lateFeePct             Int          @default(5)   // % of the contribution
-  maxRetentionPct        Int          @default(25)  // retention for turn #1, tapering to 0
-  graceHours             Int          @default(48)
-  approvalTimeoutHours   Int          @default(24)  // organizer silence => auto-execute
-  status                 GroupStatus  @default(FORMING)
+  id                   String          @id @default(cuid())
+  name                 String
+  inviteCode           String          @unique
+  organizerId          String
+  organizer            User            @relation("organizer", fields: [organizerId], references: [id])
+  contributionCents    Int
+  currency             String          @default("USD")
+  frequency            Frequency
+  orderMethod          OrderMethod
+  maxMembers           Int             @default(10)
+  lateFeePct           Int             @default(5) // % of the contribution
+  maxRetentionPct      Int             @default(25) // retention for turn #1, tapering to 0
+  graceHours           Int             @default(48)
+  approvalTimeoutHours Int             @default(24) // organizer silence => auto-execute
+  status               GroupStatus     @default(FORMING)
   // Demo mode: rounds last minutes instead of weeks so a full cycle fits in a video.
-  demoMode               Boolean      @default(false)
-  demoRoundMinutes       Int          @default(3)
-  startsAt               DateTime?
-  createdAt              DateTime     @default(now())
-  memberships            Membership[]
-  rounds                 Round[]
-  actions                PendingAction[]
-  messages               ChatMessage[]
+  demoMode             Boolean         @default(false)
+  demoRoundMinutes     Int             @default(3)
+  startsAt             DateTime?
+  // Open pasanakus: strangers can ask to join, filtered by their trust profile.
+  isOpen               Boolean         @default(false)
+  description          String?
+  admissionMode        AdmissionMode   @default(AI)
+  minCompleted         Int             @default(0)
+  minOnTimePct         Int             @default(0)
+  maxLate              Int? // null = no limit
+  acceptNewcomers      Boolean         @default(true)
+  newcomerExtraPct     Int             @default(10) // extra guarantee for newcomers
+  requireDeposit       Boolean         @default(true) // authorize one contribution when requesting
+  createdAt            DateTime        @default(now())
+  memberships          Membership[]
+  rounds               Round[]
+  actions              PendingAction[]
+  messages             ChatMessage[]
+  joinRequests         JoinRequest[]
+  aiLogs               AiLog[]
 }
 
 model Membership {
@@ -112,11 +146,13 @@ model Membership {
   user               User           @relation(fields: [userId], references: [id])
   groupId            String
   group              Group          @relation(fields: [groupId], references: [id])
-  turn               Int?           // 1-based; null until order is set
+  turn               Int? // 1-based; null until order is set
   retentionPct       Int            @default(0)
-  retentionHeldCents Int            @default(0)  // currently withheld from their pot
+  retentionHeldCents Int            @default(0) // currently withheld from their pot
   riskScore          Int            @default(50) // 0 = safest, 100 = riskiest
-  riskReason         String?        // AI explanation, shown to the group
+  riskReason         String? // AI explanation, shown to the group
+  isNewcomer         Boolean        @default(false) // admitted to an open group with no Ayni history
+  depositCaptureId   String? // admission deposit, used as their round-1 contribution
   joinedAt           DateTime       @default(now())
   contributions      Contribution[]
   payouts            Payout[]
@@ -141,57 +177,61 @@ model Round {
 }
 
 model Contribution {
-  id             String             @id @default(cuid())
-  roundId        String
-  round          Round              @relation(fields: [roundId], references: [id])
-  membershipId   String
-  membership     Membership         @relation(fields: [membershipId], references: [id])
-  amountCents    Int
-  lateFeeCents   Int                @default(0)
-  status         ContributionStatus @default(PENDING)
-  paypalOrderId  String?            @unique
-  paypalCaptureId String?
-  paidAt         DateTime?
-  remindersSent  Int                @default(0)
-  lastReminderAt DateTime?
+  id               String             @id @default(cuid())
+  roundId          String
+  round            Round              @relation(fields: [roundId], references: [id])
+  membershipId     String
+  membership       Membership         @relation(fields: [membershipId], references: [id])
+  amountCents      Int
+  lateFeeCents     Int                @default(0)
+  status           ContributionStatus @default(PENDING)
+  paypalOrderId    String?            @unique
+  paypalCaptureId  String?
+  paypalInvoiceId  String?            @unique // PayPal invoice sent at the "firm" stage
+  recoveredCents   Int                @default(0) // DEFAULTED: part recovered from their guarantee
+  compensatedCents Int                @default(0) // DEFAULTED: part later taken from their own pot
+  paidAt           DateTime?
+  remindersSent    Int                @default(0)
+  lastReminderAt   DateTime?
 
   @@unique([roundId, membershipId])
 }
 
 model Payout {
-  id              String       @id @default(cuid())
-  roundId         String?
-  round           Round?       @relation(fields: [roundId], references: [id])
-  membershipId    String
-  membership      Membership   @relation(fields: [membershipId], references: [id])
-  kind            PayoutKind
-  amountCents     Int
-  status          PayoutStatus @default(PENDING)
-  paypalBatchId   String?
-  paypalItemId    String?
-  createdAt       DateTime     @default(now())
+  id            String       @id @default(cuid())
+  roundId       String?
+  round         Round?       @relation(fields: [roundId], references: [id])
+  membershipId  String
+  membership    Membership   @relation(fields: [membershipId], references: [id])
+  kind          PayoutKind
+  amountCents   Int
+  status        PayoutStatus @default(PENDING)
+  paypalBatchId String?
+  paypalItemId  String?
+  retriedById   String? // FAILED payout that the organizer re-sent as a new payout
+  createdAt     DateTime     @default(now())
 }
 
 model PendingAction {
-  id          String       @id @default(cuid())
-  groupId     String
-  group       Group        @relation(fields: [groupId], references: [id])
-  type        ActionType
-  payload     Json
-  summary     String       // human-readable, shown to the organizer
-  status      ActionStatus @default(PENDING)
-  createdBy   String       // "system" | "ai" | userId
-  expiresAt   DateTime     // after this, auto-execute
-  createdAt   DateTime     @default(now())
-  resolvedAt  DateTime?
+  id         String       @id @default(cuid())
+  groupId    String
+  group      Group        @relation(fields: [groupId], references: [id])
+  type       ActionType
+  payload    Json
+  summary    String // human-readable, shown to the organizer
+  status     ActionStatus @default(PENDING)
+  createdBy  String // "system" | "ai" | userId
+  expiresAt  DateTime // after this, auto-execute
+  createdAt  DateTime     @default(now())
+  resolvedAt DateTime?
 }
 
 model ChatMessage {
   id        String   @id @default(cuid())
   groupId   String
   group     Group    @relation(fields: [groupId], references: [id])
-  userId    String?  // null => assistant / system
-  role      String   // "user" | "assistant" | "system"
+  userId    String? // null => assistant / system
+  role      String // "user" | "assistant" | "system"
   content   String
   createdAt DateTime @default(now())
 }
@@ -200,9 +240,61 @@ model Notification {
   id        String   @id @default(cuid())
   userId    String
   groupId   String?
-  kind      String   // "reminder" | "pot" | "action" | "mediation"
+  kind      String // "reminder" | "pot" | "action" | "mediation"
   title     String
   body      String
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model JoinRequest {
+  id               String            @id @default(cuid())
+  groupId          String
+  group            Group             @relation(fields: [groupId], references: [id])
+  userId           String
+  user             User              @relation(fields: [userId], references: [id])
+  status           JoinRequestStatus @default(PENDING)
+  message          String?
+  profile          Json // trust profile snapshot at request time
+  failures         Json // admission rules not met
+  meetsRules       Boolean
+  borderline       Boolean           @default(false)
+  aiRecommendation String? // "accept" | "reject"
+  aiReason         String?
+  depositCents     Int               @default(0)
+  paypalOrderId    String?           @unique
+  authorizationId  String?
+  createdAt        DateTime          @default(now())
+  resolvedAt       DateTime?
+
+  @@index([groupId, status])
+}
+
+/**
+ * What the AI looked at and why it decided. Visible to the group (transparency).
+ */
+model AiLog {
+  id            String   @id @default(cuid())
+  groupId       String?
+  group         Group?   @relation(fields: [groupId], references: [id])
+  kind          String // "chat" | "reminder" | "order" | "guarantee" | "admission" | "disputes"
+  source        String // "claude" | "fallback" | "rules"
+  subject       String // one line: what was decided
+  consulted     Json // tools / data the AI looked at
+  output        String // the decision and its explanation
+  // "group": every member sees it · "organizer": only the organizer and the person it is about
+  audience      String   @default("group")
+  subjectUserId String?
+  createdAt     DateTime @default(now())
+
+  @@index([groupId, createdAt])
+}
+
+/**
+ * PayPal webhook events already handled: a repeated delivery is ignored.
+ */
+model WebhookEvent {
+  id         String   @id // PayPal event id
+  type       String
+  receivedAt DateTime @default(now())
 }

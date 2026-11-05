@@ -1,16 +1,28 @@
 import { useCallback, useState } from "react";
+import { useScheme } from "@/lib/scheme";
+import { Text, View } from "react-native";
 import { Stack, useFocusEffect } from "expo-router";
-import { Card, H2, P, Screen } from "@/components/ui";
+import { H1, Notice, Screen } from "@/components/ui";
+import { Icon, type IconName } from "@/components/icons";
 import { useI18n } from "@/lib/i18n";
+import { useLayout } from "@/lib/layout";
 import { api } from "@/lib/api";
-import { colors } from "@/lib/theme";
+import { colors, fonts, space } from "@/lib/theme";
 
 type N = { id: string; kind: string; title: string; body: string; read: boolean; createdAt: string };
 
-const ICON: Record<string, string> = { reminder: "⏰", pot: "🎉", action: "📋", mediation: "🤝" };
+/** One color and icon per kind of notice, always next to its title. */
+const KIND: Record<string, { color: () => string; icon: IconName }> = {
+  reminder: { color: () => colors.pending, icon: "avisos" },
+  pot: { color: () => colors.corn, icon: "pozo" },
+  action: { color: () => colors.covered, icon: "aprobar" },
+  mediation: { color: () => colors.magenta, icon: "chat" },
+};
 
 export default function Notifications() {
-  const { t } = useI18n();
+  useScheme(); // re-render when the color mode changes
+  const { t, lang } = useI18n();
+  const { wide } = useLayout();
   const [items, setItems] = useState<N[]>([]);
 
   useFocusEffect(
@@ -27,18 +39,37 @@ export default function Notifications() {
   return (
     <Screen>
       <Stack.Screen options={{ title: t("notifications") }} />
-      {items.length === 0 && <P muted>{t("noNotifications")}</P>}
-      {items.map((n) => (
-        <Card key={n.id} style={!n.read ? { borderColor: colors.primary } : undefined}>
-          <H2>
-            {ICON[n.kind] ?? "•"} {n.title}
-          </H2>
-          <P>{n.body}</P>
-          <P muted style={{ fontSize: 12 }}>
-            {new Date(n.createdAt).toLocaleString()}
-          </P>
-        </Card>
-      ))}
+      {wide && <H1>{t("notifications")}</H1>}
+      {items.length === 0 && <Notice>{t("noNotifications")}</Notice>}
+      <View>
+        {items.map((n, i) => (
+          <View
+            key={n.id}
+            style={{
+              flexDirection: "row",
+              gap: space(3),
+              paddingVertical: space(4),
+              borderBottomWidth: i < items.length - 1 ? 1 : 0,
+              borderColor: colors.line,
+              backgroundColor: !n.read ? colors.magenta + "0A" : "transparent",
+              paddingHorizontal: !n.read ? space(2) : 0,
+            }}
+          >
+            <View style={{ paddingTop: 2 }}>
+              <Icon name={KIND[n.kind]?.icon ?? "avisos"} size={20} color={KIND[n.kind]?.color() ?? colors.inkSoft} />
+            </View>
+            <View style={{ flex: 1, gap: 4 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
+                <Text style={{ flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink }}>{n.title}</Text>
+                <Text style={{ fontFamily: fonts.body, fontSize: 13, color: colors.muted }}>
+                  {new Date(n.createdAt).toLocaleString(lang === "en" ? "en-US" : "es-BO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: fonts.body, fontSize: 15.5, lineHeight: 23, color: colors.inkSoft }}>{n.body}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
     </Screen>
   );
 }

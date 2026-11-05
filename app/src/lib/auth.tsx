@@ -5,6 +5,7 @@ import * as Linking from "expo-linking";
 import { API_URL, api } from "./api";
 import { getToken, setToken } from "./session";
 import { useI18n } from "./i18n";
+import { registerForPush, unregisterPush } from "./push";
 
 export type Me = { id: string; name: string; email: string; locale: "es" | "en" };
 
@@ -39,6 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Android push for reminders and pots (no-op on web / Expo Go)
+  const meId = me?.id;
+  useEffect(() => {
+    if (meId) registerForPush();
+  }, [meId]);
 
   // keep the assistant's language in sync with the app language
   useEffect(() => {
@@ -80,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    await unregisterPush();
     await setToken(null);
     setMe(null);
   }, []);

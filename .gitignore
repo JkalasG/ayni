@@ -9,3 +9,9 @@ app/dist/
 client_secret*.json
 *.pem
 *.key
+
+# private notes (mention other teams): never publish
+INSTRUCCIONES_AYNI.md
+
+# local database of APP_MODE=mock
+backend/.mock-db/

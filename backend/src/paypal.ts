@@ -1,6 +1,7 @@
 /**
  * Thin PayPal REST client (sandbox by default).
- * Used APIs: OAuth2, Orders v2, Payouts v1, Identity (Log in with PayPal), Webhook verification.
+ * Used APIs: OAuth2, Orders v2 (capture + authorize), Payments v2 (capture / void authorizations),
+ * Payouts v1, Invoicing v2, Disputes v1, Identity (Log in with PayPal), Webhook verification.
  */
 import { config } from "./config";
 import { formatUSD } from "./domain/rules";
@@ -36,7 +37,8 @@ async function call<T>(op: string, path: string, init: RequestInit & { idempoten
     ...(init.headers as Record<string, string>),
   };
   if (init.idempotencyKey) headers["PayPal-Request-Id"] = init.idempotencyKey;
-  const res = await fetch(`${apiBase}${path}`, { ...init, headers });
+  // A hung request must not hang the engine; the caller decides what a timeout means (see Payouts).
+  const res = await fetch(`${apiBase}${path}`, { ...init, headers, signal: AbortSignal.timeout(20_000) });
   const text = await res.text();
   if (!res.ok) throw new PayPalError(op, res.status, text);
   return (text ? JSON.parse(text) : {}) as T;
@@ -51,12 +53,15 @@ export async function createOrder(p: {
   returnUrl: string;
   cancelUrl: string;
   locale?: string;
+  /** AUTHORIZE = hold the money without charging it (admission deposit). */
+  intent?: "CAPTURE" | "AUTHORIZE";
 }): Promise<{ id: string; approveUrl: string }> {
+  const intent = p.intent ?? "CAPTURE";
   const order = await call<{ id: string; links: { rel: string; href: string }[] }>("createOrder", "/v2/checkout/orders", {
     method: "POST",
-    idempotencyKey: `order-${p.customId}-${p.amountCents}`,
+    idempotencyKey: `order-${intent}-${p.customId}-${p.amountCents}`,
     body: JSON.stringify({
-      intent: "CAPTURE",
+      intent,
       purchase_units: [
         {
           reference_id: p.customId,
@@ -98,6 +103,121 @@ export async function getOrder(orderId: string): Promise<{ status: string }> {
   return call("getOrder", `/v2/checkout/orders/${orderId}`, { method: "GET" });
 }
 
+// ---------- Orders v2 (AUTHORIZE) + Payments v2: admission deposit ----------
+
+/** After the buyer approves an AUTHORIZE order: place the hold. */
+export async function authorizeOrder(orderId: string): Promise<{ status: string; authorizationId?: string }> {
+  const res = await call<any>("authorizeOrder", `/v2/checkout/orders/${orderId}/authorize`, {
+    method: "POST",
+    idempotencyKey: `authorize-${orderId}`,
+    body: "{}",
+  });
+  const auth = res.purchase_units?.[0]?.payments?.authorizations?.[0];
+  return { status: auth?.status ?? res.status, authorizationId: auth?.id };
+}
+
+export async function getOrderAuthorization(orderId: string): Promise<string | undefined> {
+  const res = await call<any>("getOrder", `/v2/checkout/orders/${orderId}`, { method: "GET" });
+  return res.purchase_units?.[0]?.payments?.authorizations?.[0]?.id;
+}
+
+/** Request accepted: charge the held deposit (it becomes their first contribution). */
+export async function captureAuthorization(authorizationId: string): Promise<{ captureId: string; status: string }> {
+  const res = await call<any>("captureAuthorization", `/v2/payments/authorizations/${authorizationId}/capture`, {
+    method: "POST",
+    idempotencyKey: `capture-auth-${authorizationId}`,
+    body: JSON.stringify({ final_capture: true }),
+  });
+  return { captureId: res.id, status: res.status };
+}
+
+/** Request rejected: release the hold, nothing is charged. */
+export async function voidAuthorization(authorizationId: string): Promise<void> {
+  await call("voidAuthorization", `/v2/payments/authorizations/${authorizationId}/void`, {
+    method: "POST",
+    idempotencyKey: `void-${authorizationId}`,
+  });
+}
+
+// ---------- Invoicing v2: formal invoice for overdue contributions ----------
+
+export async function createAndSendInvoice(p: {
+  reference: string; // our contribution id
+  email: string;
+  name: string;
+  items: { name: string; amountCents: number }[];
+  note: string;
+  dueDate: Date;
+}): Promise<string> {
+  const invoice = await call<any>("createInvoice", "/v2/invoicing/invoices", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    idempotencyKey: `invoice-${p.reference}`,
+    body: JSON.stringify({
+      detail: {
+        currency_code: "USD",
+        reference: p.reference,
+        note: p.note.slice(0, 4000),
+        payment_term: { due_date: p.dueDate.toISOString().slice(0, 10) },
+      },
+      primary_recipients: [{ billing_info: { email_address: p.email, name: { full_name: p.name } } }],
+      items: p.items.map((i) => ({
+        name: i.name.slice(0, 200),
+        quantity: "1",
+        unit_amount: { currency_code: "USD", value: formatUSD(i.amountCents) },
+        unit_of_measure: "AMOUNT",
+      })),
+    }),
+  });
+  const id: string = invoice.id ?? String(invoice.href ?? "").split("/").pop();
+  if (!id) throw new PayPalError("createInvoice", 500, "No invoice id returned");
+  await call("sendInvoice", `/v2/invoicing/invoices/${id}/send`, {
+    method: "POST",
+    idempotencyKey: `invoice-send-${id}`,
+    body: JSON.stringify({ send_to_invoicer: false, send_to_recipient: true }),
+  });
+  return id;
+}
+
+/** The contribution was settled another way (checkout or guarantee): cancel the open invoice. */
+export async function cancelInvoice(invoiceId: string): Promise<void> {
+  await call("cancelInvoice", `/v2/invoicing/invoices/${invoiceId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ send_to_recipient: true, note: "Paid / pagado. Gracias." }),
+  });
+}
+
+// ---------- Disputes v1: context for the organizer and the mediator ----------
+
+export type Dispute = {
+  id: string;
+  reason: string;
+  status: string;
+  amountCents: number;
+  createdAt: string;
+  sellerTransactionIds: string[];
+  lifecycleStage?: string;
+};
+
+export async function listDisputes(max = 20): Promise<Dispute[]> {
+  const list = await call<any>("listDisputes", `/v1/customer/disputes?page_size=${Math.min(50, max)}`, { method: "GET" });
+  const items: any[] = (list.items ?? []).slice(0, max);
+  const out: Dispute[] = [];
+  for (const it of items) {
+    const d = await call<any>("getDispute", `/v1/customer/disputes/${it.dispute_id}`, { method: "GET" });
+    out.push({
+      id: d.dispute_id,
+      reason: d.reason,
+      status: d.status,
+      lifecycleStage: d.dispute_life_cycle_stage,
+      amountCents: Math.round(Number(d.dispute_amount?.value ?? 0) * 100),
+      createdAt: d.create_time,
+      sellerTransactionIds: (d.disputed_transactions ?? []).map((t: any) => t.seller_transaction_id).filter(Boolean),
+    });
+  }
+  return out;
+}
+
 // ---------- Payouts v1: delivering the pot / releasing retention ----------
 
 export async function sendPayout(p: {
@@ -118,11 +238,26 @@ export async function sendPayout(p: {
           amount: { value: formatUSD(p.amountCents), currency: "USD" },
           note: p.note,
           sender_item_id: p.senderBatchId,
+          // Pots and refunds between members are not a sale of goods or services.
+          purpose: "NON_GOODS_OR_SERVICES",
         },
       ],
     }),
   });
   return { batchId: res.batch_header.payout_batch_id, status: res.batch_header.batch_status };
+}
+
+/**
+ * Classify a Payouts error:
+ *  - "duplicate": PayPal already has this sender_batch_id, so the money WAS sent
+ *  - "failed": PayPal answered with a definitive error, so nothing was sent
+ *  - "unknown": timeout / network / 5xx, so it may or may not have been sent
+ */
+export function payoutErrorKind(e: unknown): "duplicate" | "failed" | "unknown" {
+  if (e instanceof PayPalError && e.status < 500) {
+    return /SENDER_BATCH_ID_ALREADY_USED|DUPLICATE/i.test(e.body) ? "duplicate" : "failed";
+  }
+  return "unknown";
 }
 
 export async function getPayoutBatch(batchId: string): Promise<any> {

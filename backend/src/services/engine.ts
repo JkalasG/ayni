@@ -1,27 +1,24 @@
 /**
  * The engine runs every few seconds and moves groups forward:
  *  1. escalating reminders (written by the AI) for pending contributions
- *  2. late fees + covering with retention once the grace period is over
- *  3. when every contribution is settled -> ask the organizer to release the pot
- *  4. auto-execute actions the organizer didn't answer in time
+ *  2. late fee once due; PayPal invoice at the "firm" stage
+ *  3. grace over: cover with the member's guarantee, or ask the organizer to close without it
+ *  4. when every contribution is settled -> ask the organizer to release the pot
+ *  5. auto-execute actions the organizer didn't answer in time (also for forming groups)
  * In demo mode all the time windows shrink to minutes.
  */
 import { db } from "../db";
 import { reminderStage, STAGE_ORDER, lateFeeCents, formatUSD } from "../domain/rules";
 import { writeReminder } from "../ai/agent";
-import { coverWithRetention } from "./payments";
+import { coverWithRetention, retryUnknownPayouts, sendOverdueInvoice } from "./payments";
 import { execute } from "./actions";
 import { notify, postToGroupChat } from "./notify";
+import { windows } from "./windows";
 
-const HOUR = 3600_000;
+export { windows };
 
-export function windows(group: { demoMode: boolean; demoRoundMinutes: number; graceHours: number; approvalTimeoutHours: number }) {
-  if (group.demoMode) {
-    const round = group.demoRoundMinutes * 60_000;
-    return { grace: round / 2, lead: round / 2, approval: 60_000 };
-  }
-  return { grace: group.graceHours * HOUR, lead: 24 * HOUR, approval: group.approvalTimeoutHours * HOUR };
-}
+const FIRM = STAGE_ORDER.indexOf("firm");
+const DONE = STAGE_ORDER.length; // remindersSent value once the final stage has been handled
 
 export async function tickGroup(groupId: string, now = new Date()) {
   const group = await db.group.findUnique({ where: { id: groupId } });
@@ -29,23 +26,32 @@ export async function tickGroup(groupId: string, now = new Date()) {
   const w = windows(group);
 
   const round = await db.round.findFirst({
-    where: { groupId, status: "COLLECTING" },
+    where: { groupId, status: { in: ["COLLECTING", "READY"] } },
+    orderBy: { number: "asc" },
     include: {
       contributions: { include: { membership: { include: { user: true } } } },
       recipient: { include: { user: true } },
     },
   });
 
-  if (round) {
+  if (round?.status === "COLLECTING") {
     for (const c of round.contributions) {
       if (c.status !== "PENDING") continue;
       const stage = reminderStage(now, round.dueAt, w.grace, w.lead);
-      const sentIdx = c.remindersSent; // number of stages already notified
       const stageIdx = STAGE_ORDER.indexOf(stage);
 
-      if (stage !== "none" && stageIdx > sentIdx) {
+      if (stage !== "none" && stageIdx > c.remindersSent && c.remindersSent < DONE) {
         const fee = stageIdx >= STAGE_ORDER.indexOf("due") ? lateFeeCents(c.amountCents, group.lateFeePct) : 0;
+        await db.contribution.update({
+          where: { id: c.id },
+          data: { remindersSent: stageIdx, lastReminderAt: now, lateFeeCents: fee },
+        });
+        if (stageIdx >= FIRM && !c.paypalInvoiceId) {
+          await sendOverdueInvoice(c.id).catch((e) => console.error("invoice failed", c.id, e));
+        }
         const text = await writeReminder({
+          groupId,
+          userId: c.membership.userId,
           name: c.membership.user.name,
           locale: c.membership.user.locale,
           stage,
@@ -56,20 +62,15 @@ export async function tickGroup(groupId: string, now = new Date()) {
           dueAt: round.dueAt,
         });
         await notify(c.membership.userId, groupId, "reminder", group.name, text);
-        await db.contribution.update({
-          where: { id: c.id },
-          data: { remindersSent: stageIdx, lastReminderAt: now, lateFeeCents: fee },
-        });
       }
 
-      if (stage === "final") {
+      if (stage === "final" && c.remindersSent < DONE) {
         const covered = await coverWithRetention(c.id);
         if (covered) {
-          await postToGroupChat(
-            groupId,
-            `🛡️ El aporte de ${c.membership.user.name} se cubrió con su garantía retenida. El grupo no pierde nada.`
-          );
-        } else if (c.remindersSent < STAGE_ORDER.length) {
+          // Private: the group only sees the contribution as settled.
+          await notify(c.membership.userId, groupId, "reminder", group.name, "Tu aporte vencido se cubrió con tu garantía retenida. El grupo no pierde nada.");
+          await notify(group.organizerId, groupId, "action", "Aporte cubierto", `El aporte de ${c.membership.user.name} (ronda ${round.number}) se cubrió con su garantía.`);
+        } else {
           await notify(
             group.organizerId,
             groupId,
@@ -77,8 +78,19 @@ export async function tickGroup(groupId: string, now = new Date()) {
             "Aporte sin cubrir",
             `${c.membership.user.name} no pagó y no tiene garantía suficiente. Abre el chat: el asistente puede ayudar a mediar.`
           );
-          await db.contribution.update({ where: { id: c.id }, data: { remindersSent: STAGE_ORDER.length } });
+          // So the group is never stuck: the organizer decides whether to close the round without it.
+          await db.pendingAction.create({
+            data: {
+              groupId,
+              type: "WAIVE_CONTRIBUTION",
+              payload: { contributionId: c.id },
+              summary: `Cerrar la ronda ${round.number} sin el aporte de ${c.membership.user.name} (queda registrado como impago; se usa lo que tenga de garantía)`,
+              createdBy: "system",
+              expiresAt: new Date(now.getTime() + w.approval),
+            },
+          });
         }
+        await db.contribution.update({ where: { id: c.id }, data: { remindersSent: DONE } });
       }
     }
 
@@ -86,24 +98,52 @@ export async function tickGroup(groupId: string, now = new Date()) {
     if (fresh === 0) {
       const claim = await db.round.updateMany({ where: { id: round.id, status: "COLLECTING" }, data: { status: "READY" } });
       if (claim.count === 1) {
-        await db.pendingAction.create({
-          data: {
-            groupId,
-            type: "RELEASE_POT",
-            payload: { roundId: round.id },
-            summary: `Enviar el pozo de la ronda ${round.number} a ${round.recipient.user.name}`,
-            createdBy: "system",
-            expiresAt: new Date(now.getTime() + w.approval),
-          },
-        });
-        await notify(group.organizerId, groupId, "action", "Pozo listo", `Todos pagaron la ronda ${round.number}. Confirma el envío.`);
-        await postToGroupChat(groupId, `🧺 ¡Todos cumplieron la ronda ${round.number}! Esperando confirmación del organizador.`);
+        await askToReleasePot(groupId, round.id, round.number, round.recipient.user.name, group.organizerId, now, w.approval);
+        await postToGroupChat(groupId, `¡Todos cumplieron la ronda ${round.number}! Esperando confirmación del organizador.`);
       }
+    }
+  } else if (round?.status === "READY") {
+    // The organizer rejected the release: ask again after one approval window.
+    const actions = await db.pendingAction.findMany({
+      where: { groupId, type: "RELEASE_POT", payload: { path: ["roundId"], equals: round.id } },
+      orderBy: { createdAt: "desc" },
+      take: 1,
+    });
+    const last = actions[0];
+    if (!last || (last.status === "REJECTED" && last.resolvedAt && now.getTime() - last.resolvedAt.getTime() > w.approval)) {
+      await askToReleasePot(groupId, round.id, round.number, round.recipient.user.name, group.organizerId, now, w.approval);
     }
   }
 
+  await runExpired(groupId, now);
+}
+
+async function askToReleasePot(
+  groupId: string,
+  roundId: string,
+  number: number,
+  recipientName: string,
+  organizerId: string,
+  now: Date,
+  approvalMs: number
+) {
+  await db.pendingAction.create({
+    data: {
+      groupId,
+      type: "RELEASE_POT",
+      payload: { roundId },
+      summary: `Enviar el pozo de la ronda ${number} a ${recipientName}`,
+      createdBy: "system",
+      expiresAt: new Date(now.getTime() + approvalMs),
+    },
+  });
+  await notify(organizerId, groupId, "action", "Pozo listo", `La ronda ${number} está completa. Confirma el envío.`);
+}
+
+async function runExpired(groupId: string, now = new Date()) {
   const expired = await db.pendingAction.findMany({
     where: { groupId, status: "PENDING", expiresAt: { lte: now } },
+    orderBy: { createdAt: "asc" },
   });
   for (const a of expired) {
     try {
@@ -120,15 +160,16 @@ export function startEngine(intervalMs: number) {
     if (running) return;
     running = true;
     try {
-      const groups = await db.group.findMany({ where: { status: { in: ["ACTIVE", "ORDERING"] } }, select: { id: true, status: true } });
+      const groups = await db.group.findMany({
+        where: { status: { in: ["FORMING", "ORDERING", "ACTIVE"] } },
+        select: { id: true, status: true },
+      });
       for (const g of groups) {
+        // FORMING: join requests waiting for the organizer · ORDERING: AI order proposals
         if (g.status === "ACTIVE") await tickGroup(g.id);
-        else {
-          // ORDERING groups may have an AI order proposal waiting for approval
-          const expired = await db.pendingAction.findMany({ where: { groupId: g.id, status: "PENDING", expiresAt: { lte: new Date() } } });
-          for (const a of expired) await execute(a, "AUTO_EXECUTED").catch((e) => console.error(e));
-        }
+        else await runExpired(g.id);
       }
+      await retryUnknownPayouts();
     } catch (e) {
       console.error("engine tick failed", e);
     } finally {

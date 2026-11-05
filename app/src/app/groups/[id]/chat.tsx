@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useScheme } from "@/lib/scheme";
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,12 +8,13 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { payContribution } from "@/lib/pay";
-import { colors, radius } from "@/lib/theme";
+import { colors, radius, fonts } from "@/lib/theme";
 
 type Msg = { id: string; role: "user" | "assistant" | "system"; userId: string | null; authorName: string | null; content: string };
 type ChatAction = { type: "pay"; contributionId: string; amount: string };
 
 export default function Chat() {
+  useScheme(); // re-render when the color mode changes
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useI18n();
   const { me } = useAuth();
@@ -84,15 +86,15 @@ export default function Chat() {
             placeholder={t("chatHint")}
             placeholderTextColor={colors.muted}
             onSubmitEditing={send}
-            style={{ flex: 1, backgroundColor: colors.bg, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 10, color: colors.ink, fontSize: 15 }}
+            style={{ flex: 1, minHeight: 44, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.line, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, color: colors.ink, fontFamily: fonts.body, fontSize: 15.5 }}
           />
           <Pressable
             onPress={send}
             accessibilityRole="button"
             accessibilityLabel={t("send")}
-            style={{ backgroundColor: colors.primary, borderRadius: radius.lg, paddingHorizontal: 16, justifyContent: "center" }}
+            style={{ backgroundColor: colors.primary, minHeight: 44, paddingHorizontal: 16, justifyContent: "center" }}
           >
-            <Text style={{ color: "#fff", fontWeight: "800" }}>{t("send")}</Text>
+            <Text style={{ color: colors.primaryInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>{t("send")}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>
@@ -104,7 +106,7 @@ function Bubble({ m, mine }: { m: Msg; mine: boolean }) {
   if (m.role === "system") {
     return (
       <View style={{ alignSelf: "center", backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, padding: 8, maxWidth: "92%" }}>
-        <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{m.content}</Text>
+        <Text style={{ color: colors.muted, fontFamily: fonts.body, fontSize: 13.5, textAlign: "center" }}>{m.content}</Text>
       </View>
     );
   }
@@ -112,7 +114,7 @@ function Bubble({ m, mine }: { m: Msg; mine: boolean }) {
   return (
     <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%", gap: 2 }}>
       {!mine && (
-        <Text style={{ fontSize: 12, color: colors.muted, fontWeight: "700" }}>{assistant ? "🤖 Ayni" : m.authorName}</Text>
+        <Text style={{ fontSize: 12.5, color: colors.muted, fontFamily: fonts.bodyBold }}>{assistant ? "Ayni" : m.authorName}</Text>
       )}
       <View
         style={{
@@ -123,7 +125,7 @@ function Bubble({ m, mine }: { m: Msg; mine: boolean }) {
           borderColor: colors.line,
         }}
       >
-        <Text style={{ color: mine ? "#fff" : colors.ink, fontSize: 15, lineHeight: 21 }}>{m.content}</Text>
+        <Text style={{ color: mine ? colors.primaryInk : colors.ink, fontFamily: fonts.body, fontSize: 15.5, lineHeight: 22 }}>{m.content}</Text>
       </View>
     </View>
   );

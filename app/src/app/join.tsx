@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useScheme } from "@/lib/scheme";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { Button, Field, P, Screen } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
@@ -8,16 +9,18 @@ import { colors } from "@/lib/theme";
 
 /** Also reachable as a link: ayni://join?code=ABC123 or https://<web>/join?code=ABC123 */
 export default function Join() {
+  useScheme(); // re-render when the color mode changes
   const { t } = useI18n();
-  const { me } = useAuth();
+  const { me, loading } = useAuth();
   const params = useLocalSearchParams<{ code?: string }>();
   const [code, setCode] = useState(params.code ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // wait for the session: on web an invite link opens here before /me has answered
   useEffect(() => {
-    if (!me) router.replace("/");
-  }, [me]);
+    if (!loading && !me) router.replace("/");
+  }, [me, loading]);
 
   const submit = async () => {
     setBusy(true);

@@ -8,8 +8,8 @@ import type { User } from "@prisma/client";
 import * as paypal from "../paypal";
 import { config } from "../config";
 import { appendQuery, isAllowedRedirect, signState } from "../auth";
-import { lateFeeCents, retentionCents, formatUSD } from "../domain/rules";
-import { HttpError } from "./groups";
+import { coverageFromGuarantee, lateFeeCents, retentionCents, formatUSD } from "../domain/rules";
+import { HttpError } from "./errors";
 import { notify, postToGroupChat } from "./notify";
 
 /** Member wants to pay their contribution: create a PayPal order and return the approval URL. */
@@ -65,13 +65,63 @@ export async function completeContribution(orderId: string) {
     data: { status: "PAID", paidAt: new Date(), paypalCaptureId: captureId },
   });
   if (updated.count === 1) {
-    await postToGroupChat(
-      c.round.groupId,
-      `✅ ${c.membership.user.name} pagó su aporte de la ronda ${c.round.number} ($${formatUSD(c.amountCents + c.lateFeeCents)}).`
-    );
+    // No amount in the group chat: it would reveal a late fee.
+    await postToGroupChat(c.round.groupId, `${c.membership.user.name} pagó su aporte de la ronda ${c.round.number}.`);
+    await settleInvoice(c.paypalInvoiceId);
     await maybeReleaseRetention(c.membershipId);
   }
   return c;
+}
+
+/** The contribution got settled another way: cancel its open PayPal invoice (best effort). */
+async function settleInvoice(invoiceId: string | null) {
+  if (invoiceId) await paypal.cancelInvoice(invoiceId).catch((e) => console.error("cancel invoice failed", e));
+}
+
+/**
+ * "Firm" stage: send a formal PayPal invoice for the overdue contribution (+ late fee).
+ * The member can pay it from their email even without opening the app.
+ */
+export async function sendOverdueInvoice(contributionId: string) {
+  const c = await db.contribution.findUnique({
+    where: { id: contributionId },
+    include: { membership: { include: { user: true } }, round: { include: { group: true } } },
+  });
+  if (!c || c.status !== "PENDING" || c.paypalInvoiceId) return null;
+  const g = c.round.group;
+  const items = [{ name: `Aporte ronda ${c.round.number} · ${g.name}`, amountCents: c.amountCents }];
+  if (c.lateFeeCents > 0) items.push({ name: "Multa por atraso (va al pozo)", amountCents: c.lateFeeCents });
+  const invoiceId = await paypal.createAndSendInvoice({
+    reference: c.id,
+    email: c.membership.user.email,
+    name: c.membership.user.name,
+    items,
+    note: `Ayni · ${g.name}. Tu aporte está vencido; el grupo te espera. Puedes pagar aquí o desde la app.`,
+    dueDate: new Date(),
+  });
+  await db.contribution.update({ where: { id: c.id }, data: { paypalInvoiceId: invoiceId } });
+  return invoiceId;
+}
+
+/** Webhook INVOICING.INVOICE.PAID: the member paid the invoice from their email. */
+export async function completeInvoice(invoiceId: string) {
+  const c = await db.contribution.findUnique({
+    where: { paypalInvoiceId: invoiceId },
+    include: { membership: { include: { user: true } }, round: true },
+  });
+  if (!c) return;
+  const updated = await db.contribution.updateMany({
+    where: { id: c.id, status: "PENDING" },
+    data: { status: "PAID", paidAt: new Date() },
+  });
+  if (updated.count === 1) {
+    await postToGroupChat(c.round.groupId, `${c.membership.user.name} pagó su aporte de la ronda ${c.round.number}.`);
+    await maybeReleaseRetention(c.membershipId);
+  } else {
+    // Paid twice (checkout + invoice): the organizer must refund one of them from PayPal.
+    const g = await db.group.findUniqueOrThrow({ where: { id: c.round.groupId } });
+    await notify(g.organizerId, g.id, "action", "Pago duplicado", `${c.membership.user.name} pagó la factura de un aporte que ya estaba saldado. Reembólsalo desde PayPal.`);
+  }
 }
 
 /** Pot = all contributions (+ late fees). Recipient gets pot minus their retention. */
@@ -90,42 +140,167 @@ export async function releasePot(roundId: string) {
   const claim = await db.round.updateMany({ where: { id: roundId, status: "READY" }, data: { status: "PAID_OUT" } });
   if (claim.count === 0) return;
 
-  const pot = round.contributions.reduce((s, c) => s + c.amountCents + c.lateFeeCents, 0);
+  // Paid or covered contributions (+ late fees), plus whatever was recovered from a defaulter's guarantee.
+  const pot = round.contributions.reduce(
+    (s, c) => s + (c.status === "DEFAULTED" ? c.recoveredCents : c.amountCents + c.lateFeeCents),
+    0
+  );
   const members = round.group.memberships.length;
   const held = retentionCents(pot, round.recipient.retentionPct, round.group.contributionCents, round.recipient.turn!, members);
-  const net = pot - held;
 
-  const payout = await db.payout.create({
-    data: { roundId, membershipId: round.recipientId, kind: "POT", amountCents: net },
+  // If the recipient left a contribution unpaid in an earlier round, that debt comes out of their pot
+  // and goes to whoever received less because of it.
+  const debts = await db.contribution.findMany({
+    // Earlier rounds only: a default in THIS round already made this pot smaller.
+    where: { membershipId: round.recipientId, status: "DEFAULTED", roundId: { not: roundId } },
+    include: { round: { include: { recipient: { include: { user: true } } } } },
+    orderBy: { round: { number: "asc" } },
   });
+  let available = pot - held;
+  const compensations: { contributionId: string; to: { id: string; email: string; name: string }; cents: number; round: number }[] = [];
+  for (const d of debts) {
+    const shortfall = d.amountCents - d.recoveredCents - d.compensatedCents;
+    if (shortfall <= 0 || available <= 0) continue;
+    const cents = Math.min(shortfall, available);
+    available -= cents;
+    compensations.push({
+      contributionId: d.id,
+      to: { id: d.round.recipientId, email: d.round.recipient.user.email, name: d.round.recipient.user.name },
+      cents,
+      round: d.round.number,
+    });
+  }
+  const debtCents = pot - held - available;
+  const net = available;
+
   await db.membership.update({
     where: { id: round.recipientId },
     data: { retentionHeldCents: { increment: held } },
   });
-
-  try {
-    const res = await paypal.sendPayout({
-      senderBatchId: payout.id,
+  if (net > 0) {
+    const payout = await db.payout.create({
+      data: { roundId, membershipId: round.recipientId, kind: "POT", amountCents: net },
+    });
+    // A failed payout never freezes the group: it is recorded and the organizer can retry it.
+    await sendRecordedPayout(payout.id, {
       email: round.recipient.user.email,
-      amountCents: net,
       subject: `Ayni: ¡recibiste el pozo de ${round.group.name}!`,
       note: `Ronda ${round.number}. Retenido como garantía: $${formatUSD(held)}, se te devuelve al completar tus aportes.`,
+      organizerId: round.group.organizerId,
+      groupId: round.groupId,
     });
-    await db.payout.update({ where: { id: payout.id }, data: { status: "SENT", paypalBatchId: res.batchId } });
-  } catch (e) {
-    await db.payout.update({ where: { id: payout.id }, data: { status: "FAILED" } });
-    await notify(round.group.organizerId, round.groupId, "action", "Error al enviar el pozo", String(e));
-    throw e;
+  }
+
+  for (const comp of compensations) {
+    await db.contribution.update({ where: { id: comp.contributionId }, data: { compensatedCents: { increment: comp.cents } } });
+    const p = await db.payout.create({ data: { roundId, membershipId: comp.to.id, kind: "COMPENSATION", amountCents: comp.cents } });
+    await sendRecordedPayout(p.id, {
+      email: comp.to.email,
+      subject: `Ayni: completamos tu pozo de ${round.group.name}`,
+      note: `En la ronda ${comp.round} faltó un aporte. Lo descontamos del pozo de quien no pagó.`,
+      organizerId: round.group.organizerId,
+      groupId: round.groupId,
+    });
   }
 
   await postToGroupChat(
     round.groupId,
-    `🎉 Pozo de la ronda ${round.number} enviado a ${round.recipient.user.name}: $${formatUSD(net)}` +
+    `Pozo de la ronda ${round.number} enviado a ${round.recipient.user.name}: $${formatUSD(net)}` +
       (held ? ` (garantía retenida: $${formatUSD(held)})` : "")
   );
+  if (debtCents) {
+    await notify(round.recipient.userId, round.groupId, "pot", "Descuento en tu pozo", `Se descontaron $${formatUSD(debtCents)} por aportes que quedaron impagos; se devolvieron a quienes recibieron de menos.`);
+    await notify(round.group.organizerId, round.groupId, "action", "Compensación enviada", `Del pozo de ${round.recipient.user.name} se descontaron $${formatUSD(debtCents)} por aportes impagos.`);
+  }
   await notify(round.recipient.userId, round.groupId, "pot", "¡Recibiste el pozo!", `$${formatUSD(net)} llegaron a tu PayPal.`);
   await openNextRound(round.groupId, round.number);
   await maybeReleaseRetention(round.recipientId);
+}
+
+async function sendRecordedPayout(
+  payoutId: string,
+  p: { email: string; subject: string; note: string; organizerId: string; groupId: string }
+): Promise<boolean> {
+  const payout = await db.payout.findUniqueOrThrow({ where: { id: payoutId } });
+  try {
+    // sender_batch_id = our payout id: sending the same record twice can never pay twice.
+    const res = await paypal.sendPayout({ senderBatchId: payout.id, email: p.email, amountCents: payout.amountCents, subject: p.subject, note: p.note });
+    await db.payout.update({ where: { id: payout.id }, data: { status: "SENT", paypalBatchId: res.batchId } });
+    return true;
+  } catch (e) {
+    const kind = paypal.payoutErrorKind(e);
+    console.error(`payout ${kind}`, payout.id, e);
+    if (kind === "duplicate") {
+      // An earlier attempt with this same id reached PayPal: it is sent.
+      await db.payout.update({ where: { id: payout.id }, data: { status: "SENT" } });
+      return true;
+    }
+    // "unknown" is retried automatically with the SAME id; "failed" waits for the organizer.
+    await db.payout.update({ where: { id: payout.id }, data: { status: kind === "unknown" ? "UNKNOWN" : "FAILED" } });
+    if (kind === "failed")
+      await notify(p.organizerId, p.groupId, "action", "Error al enviar un pago", `No se pudo enviar $${formatUSD(payout.amountCents)}. Puedes reintentarlo desde el grupo.`);
+    return false;
+  }
+}
+
+function payoutTexts(kind: string, groupName: string) {
+  return {
+    POT: { subject: `Ayni: ¡recibiste el pozo de ${groupName}!`, note: "Tu pozo del pasanaku." },
+    RETENTION_RELEASE: { subject: `Ayni: te devolvemos tu garantía de ${groupName}`, note: "Cumpliste con todos tus aportes. ¡Gracias!" },
+    COMPENSATION: { subject: `Ayni: completamos tu pozo de ${groupName}`, note: "Faltó un aporte en tu ronda; lo descontamos del pozo de quien no pagó." },
+  }[kind] ?? { subject: `Ayni · ${groupName}`, note: "Pago de tu pasanaku." };
+}
+
+/** Engine: payouts whose outcome is unknown are re-sent with the SAME id (PayPal deduplicates). */
+export async function retryUnknownPayouts() {
+  const stale = await db.payout.findMany({
+    where: { status: "UNKNOWN", createdAt: { lte: new Date(Date.now() - 60_000) } },
+    include: { membership: { include: { user: true, group: true } } },
+    take: 20,
+  });
+  for (const p of stale) {
+    const claim = await db.payout.updateMany({ where: { id: p.id, status: "UNKNOWN" }, data: { status: "PENDING" } });
+    if (claim.count === 0) continue;
+    const g = p.membership.group;
+    await sendRecordedPayout(p.id, { email: p.membership.user.email, ...payoutTexts(p.kind, g.name), organizerId: g.organizerId, groupId: g.id });
+  }
+}
+
+/** Organizer retries a failed payout. A new record (and PayPal batch id) keeps PayPal's idempotency intact. */
+export async function retryPayout(user: User, payoutId: string) {
+  const old = await db.payout.findUnique({
+    where: { id: payoutId },
+    include: { membership: { include: { user: true, group: true } } },
+  });
+  if (!old) throw new HttpError(404, "not_found");
+  const g = old.membership.group;
+  if (g.organizerId !== user.id) throw new HttpError(403, "organizer_only");
+
+  if (old.status === "UNKNOWN") {
+    // Maybe PayPal has it: re-send the SAME record, never a new one.
+    const claim = await db.payout.updateMany({ where: { id: old.id, status: "UNKNOWN" }, data: { status: "PENDING" } });
+    if (claim.count === 0) throw new HttpError(409, "already_retrying");
+    const ok = await sendRecordedPayout(old.id, { email: old.membership.user.email, ...payoutTexts(old.kind, g.name), organizerId: g.organizerId, groupId: g.id });
+    return { ok };
+  }
+
+  const fresh = await db.payout.create({
+    data: { roundId: old.roundId, membershipId: old.membershipId, kind: old.kind, amountCents: old.amountCents },
+  });
+  // Claim the failed record so two clicks cannot send twice.
+  const claim = await db.payout.updateMany({ where: { id: old.id, status: "FAILED", retriedById: null }, data: { retriedById: fresh.id } });
+  if (claim.count === 0) {
+    await db.payout.delete({ where: { id: fresh.id } });
+    throw new HttpError(409, "not_failed");
+  }
+  const ok = await sendRecordedPayout(fresh.id, {
+    email: old.membership.user.email,
+    ...payoutTexts(old.kind, g.name),
+    organizerId: g.organizerId,
+    groupId: g.id,
+  });
+  if (ok) await notify(g.organizerId, g.id, "pot", "Pago reenviado", `Se reenvió con éxito $${formatUSD(old.amountCents)} a ${old.membership.user.name}.`);
+  return { ok };
 }
 
 async function openNextRound(groupId: string, finishedNumber: number) {
@@ -138,7 +313,7 @@ async function openNextRound(groupId: string, finishedNumber: number) {
   const memberships = await db.membership.findMany({ where: { groupId, retentionHeldCents: { gt: 0 } } });
   for (const m of memberships) await releaseRetention(m.id);
   await db.group.update({ where: { id: groupId }, data: { status: "FINISHED" } });
-  await postToGroupChat(groupId, "🌄 ¡El pasanaku terminó! Gracias por cumplir. Ayni: hoy por ti, mañana por mí.");
+  await postToGroupChat(groupId, "¡El pasanaku terminó! Gracias por cumplir. Ayni: hoy por ti, mañana por mí.");
 }
 
 /** Give back the guarantee as soon as the member has no pending contributions left. */
@@ -159,20 +334,14 @@ async function releaseRetention(membershipId: string) {
   });
   if (claim.count === 0) return;
   const payout = await db.payout.create({ data: { membershipId: m.id, kind: "RETENTION_RELEASE", amountCents: amount } });
-  try {
-    const res = await paypal.sendPayout({
-      senderBatchId: payout.id,
-      email: m.user.email,
-      amountCents: amount,
-      subject: `Ayni: te devolvemos tu garantía de ${m.group.name}`,
-      note: "Cumpliste con todos tus aportes. ¡Gracias!",
-    });
-    await db.payout.update({ where: { id: payout.id }, data: { status: "SENT", paypalBatchId: res.batchId } });
-    await notify(m.userId, m.groupId, "pot", "Garantía devuelta", `$${formatUSD(amount)} volvieron a tu PayPal.`);
-  } catch (e) {
-    await db.payout.update({ where: { id: payout.id }, data: { status: "FAILED" } });
-    throw e;
-  }
+  const ok = await sendRecordedPayout(payout.id, {
+    email: m.user.email,
+    subject: `Ayni: te devolvemos tu garantía de ${m.group.name}`,
+    note: "Cumpliste con todos tus aportes. ¡Gracias!",
+    organizerId: m.group.organizerId,
+    groupId: m.groupId,
+  });
+  if (ok) await notify(m.userId, m.groupId, "pot", "Garantía devuelta", `$${formatUSD(amount)} volvieron a tu PayPal.`);
 }
 
 /**
@@ -186,11 +355,58 @@ export async function coverWithRetention(contributionId: string): Promise<boolea
   });
   if (!c || c.status !== "PENDING") return false;
   const fee = lateFeeCents(c.amountCents, c.round.group.lateFeePct);
-  const needed = c.amountCents + fee;
-  if (c.membership.retentionHeldCents < needed) return false;
-  await db.$transaction([
-    db.membership.update({ where: { id: c.membershipId }, data: { retentionHeldCents: { decrement: needed } } }),
-    db.contribution.update({ where: { id: c.id }, data: { status: "COVERED", lateFeeCents: fee, paidAt: new Date() } }),
-  ]);
-  return true;
+  const cover = coverageFromGuarantee(c.membership.retentionHeldCents, c.amountCents, fee);
+  if (!cover) return false;
+  const needed = cover.amount + cover.fee;
+  // Conditional updates: a payment arriving at the same moment wins, and nothing is taken twice.
+  const done = await db
+    .$transaction(async (tx) => {
+      const claim = await tx.contribution.updateMany({
+        where: { id: c.id, status: "PENDING" },
+        data: { status: "COVERED", lateFeeCents: cover.fee, paidAt: new Date() },
+      });
+      if (claim.count === 0) return false;
+      const take = await tx.membership.updateMany({
+        where: { id: c.membershipId, retentionHeldCents: { gte: needed } },
+        data: { retentionHeldCents: { decrement: needed } },
+      });
+      if (take.count === 0) throw new Error("guarantee_changed"); // rolls back the claim
+      return true;
+    })
+    .catch(() => false);
+  if (done) await settleInvoice(c.paypalInvoiceId);
+  return done;
+}
+
+/**
+ * Unpaid and the guarantee is not enough: the organizer (or the timeout) lets the
+ * round close without it. Whatever guarantee they still hold goes to the pot, and
+ * it stays on their trust profile as an abandoned pasanaku.
+ */
+export async function waiveContribution(contributionId: string) {
+  const c = await db.contribution.findUnique({
+    where: { id: contributionId },
+    include: { membership: { include: { user: true } }, round: true },
+  });
+  if (!c || c.status !== "PENDING") return;
+  const recovered = Math.min(c.membership.retentionHeldCents, c.amountCents);
+  const done = await db.$transaction(async (tx) => {
+    const claim = await tx.contribution.updateMany({
+      where: { id: c.id, status: "PENDING" },
+      data: { status: "DEFAULTED", lateFeeCents: 0, recoveredCents: recovered },
+    });
+    if (claim.count === 0) return false;
+    if (recovered > 0)
+      await tx.membership.update({ where: { id: c.membershipId }, data: { retentionHeldCents: { decrement: recovered } } });
+    return true;
+  });
+  if (!done) return;
+  await settleInvoice(c.paypalInvoiceId);
+  // Details only to the person and the organizer; the group just sees the round move on.
+  const detail =
+    `Tu aporte de la ronda ${c.round.number} quedó impago. ` +
+    (recovered ? `Se usaron $${formatUSD(recovered)} de tu garantía. ` : "") +
+    "Se descontará de tu pozo y queda en tu perfil de confianza. Si quieres hablar, el asistente puede ayudarte.";
+  await notify(c.membership.userId, c.round.groupId, "mediation", "Aporte impago", detail);
+  await postToGroupChat(c.round.groupId, `La ronda ${c.round.number} se cerró por decisión del organizador.`);
 }

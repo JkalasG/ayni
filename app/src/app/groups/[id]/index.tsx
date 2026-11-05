@@ -1,14 +1,43 @@
-import { useCallback, useEffect, useState } from "react";
-import { Alert, Platform, RefreshControl, ScrollView, Share, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { AccessibilityInfo, Alert, Platform, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
 import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Avatar, Badge, Button, Card, H2, Loading, P, Stripe } from "@/components/ui";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
+import { Badge, Button, LinkRow, Loading, Notice, P, Weave } from "@/components/ui";
+import { RuleChecklist, TrustCard, type TrustProfile } from "@/components/trust";
+import { Tejido, WeaveIn, WovenFill } from "@/components/tejido";
+import { Confetti, PotCelebration } from "@/components/celebrations";
+import { Icon } from "@/components/icons";
+import { StepButton, SteppedBox } from "@/components/stepped";
+import { WovenAvatar } from "@/components/woven-avatar";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { useLayout } from "@/lib/layout";
+import { useScheme } from "@/lib/scheme";
 import { api, ApiError, money } from "@/lib/api";
 import { payContribution } from "@/lib/pay";
-import { colors } from "@/lib/theme";
+import { getFlag, setFlag } from "@/lib/flags";
+import { fonts, space, type Palette } from "@/lib/theme";
 
-type Contribution = { id: string; membershipId: string; status: "PENDING" | "PAID" | "COVERED"; amountCents: number; lateFeeCents: number };
+type Contribution = {
+  id: string;
+  membershipId: string;
+  // CLOSED = someone else's unpaid contribution, as the group sees it (details are private)
+  status: "PENDING" | "PAID" | "COVERED" | "DEFAULTED" | "CLOSED";
+  amountCents: number;
+  lateFeeCents: number;
+};
+type JoinReq = {
+  id: string;
+  name: string;
+  message: string | null;
+  profile: TrustProfile;
+  failures: string[];
+  meetsRules: boolean;
+  aiRecommendation: "accept" | "reject" | null;
+  aiReason: string | null;
+  depositCents: number;
+};
 type Round = {
   id: string;
   number: number;
@@ -24,6 +53,7 @@ type Member = {
   turn: number | null;
   retentionPct: number;
   retentionHeldCents: number;
+  isNewcomer: boolean;
   user: { id: string; name: string };
 };
 type Action = { id: string; type: string; summary: string; expiresAt: string; payload: any };
@@ -37,7 +67,14 @@ type Group = {
   frequency: string;
   orderMethod: "LOTTERY" | "AI" | "ORGANIZER";
   demoMode: boolean;
+  isOpen: boolean;
+  minCompleted: number;
+  minOnTimePct: number;
+  maxLate: number | null;
+  acceptNewcomers: boolean;
   memberships: Member[];
+  requests: JoinReq[];
+  failedPayouts: { id: string; kind: string; status: "FAILED" | "UNKNOWN"; amountCents: number; name: string }[];
   rounds: Round[];
   actions: Action[];
   myMembershipId: string;
@@ -45,15 +82,30 @@ type Group = {
   potCents: number;
 };
 
-const AVATAR_COLORS = [colors.primary, colors.corn, colors.leaf, colors.sky, "#8E5BA8", "#D27C5A"];
+const statusColor = (c: Palette, s: Group["status"]) =>
+  ({ FORMING: c.naranja.text, ORDERING: c.turquesa.text, ACTIVE: c.verde.text, FINISHED: c.muted })[s];
+
+const firstName = (n: string) => n.replace(/^(Doña|Don)\s+/i, "").split(" ")[0];
 
 export default function GroupScreen() {
   const { id, status } = useLocalSearchParams<{ id: string; status?: string }>();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { me } = useAuth();
+  const { c } = useScheme();
+  const { wide } = useLayout();
+  const insets = useSafeAreaInsets();
   const [g, setG] = useState<Group | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ text: string; tone: "ok" | "error" | "info" } | null>(null);
+  const [confetti, setConfetti] = useState(0);
+  const [pot, setPot] = useState<{ round: Round; streak: number | null } | null>(null);
+  const lastMine = useRef<string | null>(null);
+  // contributions already shown as paid in the pot bar, so only new ones weave in
+  const seenPaid = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!g) return;
+    seenPaid.current = new Set(g.rounds.flatMap((r) => r.contributions.filter((x) => x.status !== "PENDING").map((x) => x.id)));
+  });
 
   const load = useCallback(async () => {
     setG(await api<Group>(`/groups/${id}`));
@@ -62,18 +114,50 @@ export default function GroupScreen() {
   useFocusEffect(
     useCallback(() => {
       load().catch(() => {});
-      // live updates while the screen is open (great for the demo video)
+      // live updates while the screen is open
       const timer = setInterval(() => load().catch(() => {}), 5000);
       return () => clearInterval(timer);
     }, [load])
   );
 
+  const celebratePayment = useCallback(() => {
+    setConfetti((n) => n + 1);
+    if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    AccessibilityInfo.announceForAccessibility?.(t("paymentReceived"));
+  }, [t]);
+
   // Web returns here from PayPal with ?status=paid|cancelled|error
   useEffect(() => {
-    if (status === "paid") setBanner(t("paymentOk"));
-    else if (status === "cancelled") setBanner(t("paymentCancel"));
-    else if (status === "error") setBanner(t("paymentError"));
+    if (status === "paid") {
+      setBanner({ text: t("paymentOk"), tone: "ok" });
+      celebratePayment();
+    } else if (status === "cancelled") setBanner({ text: t("paymentCancel"), tone: "info" });
+    else if (status === "error") setBanner({ text: t("paymentError"), tone: "error" });
   }, [status, t]);
+
+  // My contribution just went from pending to paid (here or from another device): weave it and celebrate.
+  const current = g?.rounds.find((r) => r.status === "COLLECTING" || r.status === "READY");
+  const myContribution = current?.contributions.find((x) => x.membershipId === g?.myMembershipId);
+  useEffect(() => {
+    const key = myContribution ? `${myContribution.id}:${myContribution.status}` : null;
+    const before = lastMine.current;
+    lastMine.current = key;
+    if (before && key && before.startsWith(myContribution!.id) && before.endsWith(":PENDING") && myContribution!.status !== "PENDING" && status !== "paid") celebratePayment();
+  }, [myContribution?.id, myContribution?.status]);
+
+  // I took the pot and haven't seen the celebration on this device yet.
+  useEffect(() => {
+    if (!g) return;
+    const mine = g.rounds.find((r) => r.recipientId === g.myMembershipId && r.status === "PAID_OUT");
+    if (!mine || pot) return;
+    const flag = `ayni_pot_${mine.id}`;
+    getFlag(flag).then(async (seen) => {
+      if (seen) return;
+      await setFlag(flag);
+      const profile = await api<TrustProfile & { streak?: number }>("/me/profile").catch(() => null);
+      setPot({ round: mine, streak: profile?.streak ?? null });
+    });
+  }, [g?.id, g?.rounds.map((r) => r.status).join()]);
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
     setBusy(key);
@@ -82,7 +166,7 @@ export default function GroupScreen() {
       await load();
     } catch (e) {
       const msg = e instanceof ApiError ? e.code : String(e);
-      Platform.OS === "web" ? setBanner(msg) : Alert.alert("Ayni", msg);
+      Platform.OS === "web" ? setBanner({ text: msg, tone: "error" }) : Alert.alert("Ayni", msg);
     } finally {
       setBusy(null);
     }
@@ -90,173 +174,430 @@ export default function GroupScreen() {
 
   if (!g || !me) return <Loading />;
 
-  const current = g.rounds.find((r) => r.status === "COLLECTING" || r.status === "READY");
-  const myContribution = current?.contributions.find((c) => c.membershipId === g.myMembershipId);
+  const locale = lang === "en" ? "en-US" : "es-BO";
+  const day = (d: string) => new Date(d).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" });
   const memberName = (membershipId: string) => g.memberships.find((m) => m.id === membershipId)?.user.name ?? "?";
-  const settled = current ? current.contributions.filter((c) => c.status !== "PENDING").length : 0;
+  const settled = current ? current.contributions.filter((x) => x.status !== "PENDING").length : 0;
+  const missing = current ? current.contributions.filter((x) => x.status === "PENDING").map((x) => firstName(memberName(x.membershipId))) : [];
+  const rules = { minCompleted: g.minCompleted, minOnTimePct: g.minOnTimePct, maxLate: g.maxLate, acceptNewcomers: g.acceptNewcomers };
+  const mustPay = myContribution?.status === "PENDING" && current?.status === "COLLECTING";
+  const payAmount = myContribution ? myContribution.amountCents + myContribution.lateFeeCents : 0;
+  const mine = g.memberships.find((m) => m.id === g.myMembershipId);
+  const myTurnRound = g.rounds.find((r) => r.recipientId === g.myMembershipId);
+  const isMyRound = current?.recipientId === g.myMembershipId;
 
-  return (
-    <>
-      <Stack.Screen options={{ title: g.name }} />
-      <ScrollView
-        style={{ backgroundColor: colors.bg }}
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48, maxWidth: 560, width: "100%", alignSelf: "center" }}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={() => load().catch(() => {})} />}
-      >
-        {banner && (
-          <Card style={{ backgroundColor: colors.leaf + "18", borderColor: colors.leaf }}>
-            <P>{banner}</P>
-          </Card>
+  const pay = () =>
+    run("pay", async () => {
+      const r = await payContribution(myContribution!.id, g.id);
+      if (r === "paid") {
+        setBanner({ text: t("paymentOk"), tone: "ok" });
+        celebratePayment();
+      } else if (r === "cancelled") setBanner({ text: t("paymentCancel"), tone: "info" });
+      else if (r === "error") setBanner({ text: t("paymentError"), tone: "error" });
+    });
+
+  // ------------------------------------------------------------------ blocks
+
+  const sub = `${g.memberships.length} ${t("membersWord")}, ${t(g.frequency as Key).toLowerCase()}, ${money(g.contributionCents)} ${t("perRound")}`;
+
+  const header = (
+    <View style={{ gap: space(3) }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}>
+        {!wide && (
+          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => (router.canGoBack() ? router.back() : router.navigate("/groups"))}>
+            <SteppedBox fill={c.surface} stroke={c.line} step={3} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+              <Icon name="atras" size={18} color={c.ink} />
+            </SteppedBox>
+          </Pressable>
         )}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text accessibilityRole="header" numberOfLines={2} style={{ fontFamily: fonts.display, fontSize: wide ? 30 : 19, lineHeight: wide ? 36 : 24, color: c.ink }}>
+            {g.name}
+          </Text>
+          <Text style={{ fontFamily: fonts.body, fontSize: wide ? 16 : 14, color: c.muted }}>{sub}</Text>
+        </View>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        <Badge text={t(`status_${g.status}` as Key)} color={statusColor(c, g.status)} />
+        {g.isOpen ? <Badge text={t("openBadge")} color={c.turquesa.text} /> : null}
+        {g.demoMode ? <Badge text={t("demoBadge")} color={c.muted} /> : null}
+        {g.isOrganizer ? <Badge text={t("organizer")} color={c.fucsia.text} /> : null}
+      </View>
+    </View>
+  );
 
-        {/* Summary */}
-        <Card>
-          <Stripe />
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View>
-              <P muted>{t("pot")}</P>
-              <Text style={{ fontSize: 34, fontWeight: "900", color: colors.ink }}>{money(g.potCents)}</Text>
-              <P muted>
-                {money(g.contributionCents)} {t("perRound")} · {t(g.frequency as Key)}
-              </P>
-            </View>
-            <Badge text={t(`status_${g.status}` as Key)} color={g.status === "ACTIVE" ? colors.leaf : colors.corn} />
+  /** The pot, with a bar that fills with threads as contributions come in. */
+  const potCard = (
+    <SteppedBox fill={c.surface} stroke={c.line} step={6} style={{ padding: wide ? space(7) : space(5), gap: space(3) }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Icon name="pozo" size={18} color={c.amarillo.text} />
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: c.muted }}>
+            {current ? `${t("pot")}, ${t("round").toLowerCase()} ${current.number} ${t("of")} ${g.rounds.length}` : t("pot")}
+          </Text>
+        </View>
+        {current && current.status === "COLLECTING" ? (
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.naranja.text }}>
+            {t("dueShort")} {day(current.dueAt)}
+          </Text>
+        ) : null}
+      </View>
+      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 76 : 54, lineHeight: wide ? 84 : 62, color: c.amarillo.text, fontVariant: ["tabular-nums"], letterSpacing: -1 }}>
+        {money(g.potCents)}
+      </Text>
+      {current ? (
+        <Text style={{ fontFamily: fonts.body, fontSize: 17, color: c.ink }}>
+          {isMyRound ? (
+            <Text style={{ fontFamily: fonts.bodyBold, color: c.fucsia.text }}>{t("youReceiveThisRound")}</Text>
+          ) : (
+            <>
+              {t("thisRoundReceives")} <Text style={{ fontFamily: fonts.bodyBold, color: c.fucsia.text }}>{current.recipient.user.name}</Text>
+            </>
+          )}
+        </Text>
+      ) : (
+        <P muted>
+          {money(g.contributionCents)} {t(`per_${g.frequency}` as Key)}
+        </P>
+      )}
+      {current && (
+        <View style={{ gap: 8 }}>
+          <View
+            style={{ flexDirection: "row", gap: 4 }}
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel={`${settled} ${t("of")} ${current.contributions.length} ${t("contributionsIn")}`}
+            accessibilityValue={{ min: 0, max: current.contributions.length, now: settled }}
+          >
+            {[...current.contributions].sort((a, b) => Number(a.status === "PENDING") - Number(b.status === "PENDING")).map((x) => (
+              <View key={x.id} style={{ flex: 1, height: 16 }}>
+                {x.status === "PENDING" ? (
+                  <View style={{ flex: 1, borderWidth: 2, borderStyle: "dashed", borderColor: c.naranja.fill }} />
+                ) : (
+                  <SegmentFill fresh={!!seenPaid.current && !seenPaid.current.has(x.id)} color={x.status === "COVERED" ? c.turquesa.fill : x.status === "PAID" ? c.verde.fill : c.muted} />
+                )}
+              </View>
+            ))}
           </View>
-        </Card>
+          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: c.muted }}>
+            {settled} {t("of")} {current.contributions.length} {t("contributionsIn")}
+            {missing.length ? `, ${t("missing")} ${joinNames(missing, t("and"))}` : ""}
+          </Text>
+        </View>
+      )}
+    </SteppedBox>
+  );
 
-        {/* Current round */}
-        {current && (
-          <Card>
-            <H2>
-              {t("round")} {current.number} {t("of")} {g.rounds.length}
-            </H2>
-            <P>
-              🧺 {current.recipient.user.name} {t("receives")} · {t("due")}: {new Date(current.dueAt).toLocaleString()}
-            </P>
-            <View style={{ height: 10, backgroundColor: colors.surfaceAlt, borderRadius: 99, overflow: "hidden" }}>
-              <View
-                style={{
-                  width: `${(settled / current.contributions.length) * 100}%`,
-                  height: "100%",
-                  backgroundColor: colors.leaf,
-                }}
-              />
+  const turnLine = mine?.turn != null && myTurnRound ? (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: c.amarillo.fill + "26", alignSelf: "flex-start" }}>
+      <Icon name="turno" size={14} color={c.amarillo.text} />
+      <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.amarillo.text }}>
+        {t("yourTurnShort")}: R{myTurnRound.number}
+      </Text>
+    </View>
+  ) : null;
+
+  /** My contribution: the one action that matters. */
+  const payPanel = myContribution && (
+    <SteppedBox fill={c.surface} stroke={mustPay ? c.fucsia.fill : c.line} step={5} style={{ padding: space(4), gap: space(3) }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>{t("yourContributionRound")}</Text>
+          {mustPay ? (
+            <Text style={{ fontFamily: fonts.display, fontSize: 19, color: c.ink }}>
+              {money(payAmount)} <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: c.naranja.text }}>{t("pending").toLowerCase()}</Text>
+            </Text>
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Icon name={myContribution.status === "COVERED" ? "garantia" : "aprobar"} size={18} color={myContribution.status === "COVERED" ? c.turquesa.text : c.verde.text} />
+              <Text style={{ flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, lineHeight: 22, color: myContribution.status === "COVERED" ? c.turquesa.text : c.verde.text }}>
+                {myContribution.status === "COVERED" ? t("coveredForYou") : t("youPaid")}
+              </Text>
             </View>
-            {current.contributions.map((c) => (
-              <View key={c.id} style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <P>{memberName(c.membershipId)}</P>
-                <Badge
-                  text={c.status === "PAID" ? t("paid") : c.status === "COVERED" ? t("covered") : t("pending")}
-                  color={c.status === "PENDING" ? colors.corn : colors.leaf}
-                />
-              </View>
-            ))}
-            {myContribution?.status === "PENDING" && current.status === "COLLECTING" ? (
-              <Button
-                kind="paypal"
-                title={`${t("payNow")} · ${money(myContribution.amountCents + myContribution.lateFeeCents)}`}
-                loading={busy === "pay"}
-                onPress={() =>
-                  run("pay", async () => {
-                    const r = await payContribution(myContribution.id, g.id);
-                    if (r === "paid") setBanner(t("paymentOk"));
-                    else if (r === "cancelled") setBanner(t("paymentCancel"));
-                    else if (r === "error") setBanner(t("paymentError"));
-                  })
-                }
-              />
-            ) : myContribution ? (
-              <P muted>{t("youPaid")}</P>
-            ) : null}
-          </Card>
-        )}
+          )}
+        </View>
+        {turnLine}
+      </View>
+      {mustPay && myContribution.lateFeeCents > 0 && (
+        <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.rojo.text }}>
+          {t("includesFee")} {money(myContribution.lateFeeCents)}
+        </Text>
+      )}
+      {mustPay && (
+        <StepButton
+          title={`${t("payWith")} ${money(payAmount)} ${t("withPayPal")}`}
+          fill={c.paypal}
+          ink={c.paypalInk}
+          loading={busy === "pay"}
+          left={<Icon name="pagar" size={20} color={c.paypalInk} />}
+          onPress={pay}
+        />
+      )}
+      {!mustPay && mine?.turn != null && (
+        <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>
+          {mine.retentionPct > 0 ? `${t("guaranteeWithheld")} ${mine.retentionPct}%` : t("noGuarantee")}
+          {mine.retentionHeldCents > 0 ? `, ${money(mine.retentionHeldCents)} ${t("held")}` : ""}
+        </Text>
+      )}
+    </SteppedBox>
+  );
 
-        {/* Organizer decisions (human in the loop) */}
-        {g.isOrganizer && g.actions.length > 0 && (
-          <Card style={{ borderColor: colors.primary }}>
-            <H2>📋 {t("pendingDecisions")}</H2>
-            {g.actions.map((a) => (
-              <View key={a.id} style={{ gap: 8 }}>
-                <P>{a.summary}</P>
-                {a.type === "APPROVE_ORDER" &&
-                  (a.payload.order as string[]).map((mid, i) => (
-                    <P key={mid} muted>
-                      {i + 1}. {memberName(mid)}
-                      {a.payload.reasons?.[mid] ? ` — ${a.payload.reasons[mid]}` : ""}
-                    </P>
-                  ))}
-                <P muted style={{ fontSize: 12 }}>
-                  {t("autoIn")}: {new Date(a.expiresAt).toLocaleString()}
-                </P>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Button title={t("approve")} loading={busy === a.id} onPress={() => run(a.id, () => api(`/actions/${a.id}/approve`, { body: {} }))} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Button kind="danger" title={t("reject")} onPress={() => run(a.id + "r", () => api(`/actions/${a.id}/reject`, { body: {} }))} />
-                  </View>
-                </View>
-              </View>
-            ))}
-          </Card>
-        )}
+  const weave = g.rounds.length > 0 && (
+    <View style={{ borderWidth: 1, borderColor: c.line, backgroundColor: c.surface, borderRadius: 10, padding: wide ? space(6) : space(4), gap: space(4) }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>
+          {t("weaveTitle")}
+        </Text>
+        <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted }}>{t("eachThread")}</Text>
+      </View>
+      <Tejido rounds={g.rounds} members={g.memberships} me={g.myMembershipId} cell={wide ? 50 : 38} onRoundComplete={() => setConfetti((n) => n + 1)} />
+    </View>
+  );
 
-        {/* Members */}
-        <Card>
-          <H2>{t("members")}</H2>
-          {[...g.memberships]
-            .sort((a, b) => (a.turn ?? 99) - (b.turn ?? 99))
-            .map((m, i) => (
-              <View key={m.id} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <Avatar name={m.user.name} color={AVATAR_COLORS[i % AVATAR_COLORS.length]} />
-                <View style={{ flex: 1 }}>
-                  <P style={{ fontWeight: "700" }}>
-                    {m.user.name}
-                    {m.userId === me.id ? ` (${t("you")})` : ""}
-                    {m.userId === g.organizerId ? ` · ${t("organizer")}` : ""}
-                  </P>
-                  {m.turn != null && (
+  const decisions = g.isOrganizer && g.actions.length > 0 && (
+    <View style={{ borderWidth: 2, borderColor: c.fucsia.fill, backgroundColor: c.surface, borderRadius: 10, padding: space(5), gap: space(4) }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Icon name="aprobar" size={20} color={c.fucsia.text} />
+        <Text accessibilityRole="header" style={{ flex: 1, fontFamily: fonts.display, fontSize: 17, color: c.ink }}>
+          {t("pendingDecisions")}
+        </Text>
+        <View style={{ backgroundColor: c.fucsia.fill, minWidth: 26, height: 26, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 }}>
+          <Text style={{ fontFamily: fonts.display, fontSize: 13, color: c.onAction }}>{g.actions.length}</Text>
+        </View>
+      </View>
+      {g.actions.map((a, i) => (
+        <View key={a.id} style={{ gap: space(3), paddingTop: i ? space(4) : 0, borderTopWidth: i ? 1 : 0, borderColor: c.line }}>
+          <P bold>{a.summary}</P>
+          {a.type === "ADMIT_MEMBER" &&
+            (() => {
+              const r = g.requests.find((x) => x.id === a.payload.requestId);
+              if (!r) return null;
+              return (
+                <View style={{ gap: space(3) }}>
+                  {r.message ? (
+                    <View style={{ borderLeftWidth: 3, borderColor: c.line, paddingLeft: space(3) }}>
+                      <P style={{ fontStyle: "italic" }}>{r.message}</P>
+                    </View>
+                  ) : null}
+                  <TrustCard profile={r.profile} title={r.name} />
+                  <RuleChecklist check={{ meets: r.meetsRules, borderline: false, failures: r.failures }} rules={rules} profile={r.profile} />
+                  {r.aiRecommendation && (
+                    <View style={{ borderLeftWidth: 4, borderColor: c.turquesa.fill, backgroundColor: c.turquesa.fill + "1A", padding: space(4), gap: 6 }}>
+                      <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, color: c.turquesa.text }}>
+                        {t("aiRecommends")} {r.aiRecommendation === "accept" ? t("accept") : t("rejectWord")}
+                      </Text>
+                      <P>{r.aiReason}</P>
+                      <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted }}>{t("youDecide")}</Text>
+                    </View>
+                  )}
+                  {r.depositCents > 0 && (
                     <P muted>
-                      {t("turn")} #{m.turn} · {t("guarantee")} {m.retentionPct}%
-                      {m.retentionHeldCents > 0 ? ` · ${money(m.retentionHeldCents)} ${t("held")}` : ""}
+                      {t("deposit")}: {money(r.depositCents)}
                     </P>
                   )}
                 </View>
-              </View>
+              );
+            })()}
+          {a.type === "APPROVE_ORDER" &&
+            (a.payload.order as string[]).map((mid, k) => (
+              <P key={mid} muted>
+                {k + 1}. {memberName(mid)}
+                {a.payload.reasons?.[mid] ? `: ${a.payload.reasons[mid]}` : ""}
+              </P>
             ))}
-        </Card>
+          <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted }}>
+            {t("autoIn")} {new Date(a.expiresAt).toLocaleString(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Button compact title={t("approve")} left={<Icon name="aprobar" size={16} color={c.onAction} />} loading={busy === a.id} onPress={() => run(a.id, () => api(`/actions/${a.id}/approve`, { body: {} }))} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button compact kind="danger" title={t("reject")} left={<Icon name="rechazar" size={14} color={c.rojo.text} />} loading={busy === a.id + "r"} onPress={() => run(a.id + "r", () => api(`/actions/${a.id}/reject`, { body: {} }))} />
+            </View>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
 
-        {/* Invite */}
-        {g.status === "FORMING" && (
-          <Card>
-            <P muted>{t("inviteShare")}</P>
-            <Text style={{ fontSize: 32, fontWeight: "900", letterSpacing: 6, color: colors.primary, textAlign: "center" }}>
-              {g.inviteCode}
-            </Text>
-            {Platform.OS !== "web" && (
-              <Button kind="secondary" title="Compartir / Share" onPress={() => Share.share({ message: `Ayni · ${g.name}: ${g.inviteCode}` })} />
+  const failed = g.isOrganizer && g.failedPayouts.length > 0 && (
+    <View style={{ borderLeftWidth: 4, borderColor: c.rojo.fill, backgroundColor: c.surface, padding: space(4), gap: space(3) }}>
+      <Text style={{ fontFamily: fonts.display, fontSize: 16, color: c.ink }}>{t("failedPayouts")}</Text>
+      {g.failedPayouts.map((p) => (
+        <View key={p.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <P bold>
+              {p.name}, {money(p.amountCents)}
+            </P>
+            {p.status === "UNKNOWN" ? <P muted>{t("payoutUnknown")}</P> : null}
+          </View>
+          <Button compact kind="secondary" title={t("retry")} loading={busy === p.id} onPress={() => run(p.id, () => api(`/payouts/${p.id}/retry`, { body: {} }))} />
+        </View>
+      ))}
+    </View>
+  );
+
+  const members = (
+    <View style={{ gap: space(2) }}>
+      <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 17, color: c.ink }}>
+        {t("members")} ({g.memberships.length})
+      </Text>
+      {[...g.memberships]
+        .sort((a, b) => (a.turn ?? 99) - (b.turn ?? 99))
+        .map((m, i, all) => (
+          <View key={m.id} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: space(2.5), borderBottomWidth: i < all.length - 1 ? 1 : 0, borderColor: c.line }}>
+            <WovenAvatar id={m.user.id} name={m.user.name} size={40} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <P bold>
+                {m.user.name}
+                {m.userId === me.id ? ` (${t("you")})` : ""}
+              </P>
+              <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>
+                {[m.userId === g.organizerId ? t("organizer") : null, m.turn != null ? `${t("guarantee")} ${m.retentionPct}%` : null, m.isNewcomer ? t("newcomer") : null].filter(Boolean).join(", ")}
+              </Text>
+            </View>
+            {m.turn != null && (
+              <View style={{ alignItems: "center", minWidth: 40 }}>
+                <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 20, color: m.id === current?.recipientId ? c.amarillo.text : c.muted, fontVariant: ["tabular-nums"] }}>R{m.turn}</Text>
+              </View>
             )}
-          </Card>
-        )}
+          </View>
+        ))}
+    </View>
+  );
 
-        {/* Organizer controls */}
-        {g.isOrganizer && (g.status === "FORMING" || g.status === "ORDERING") && (
-          <Button
-            kind="secondary"
-            title={`${t("setOrder")} (${t(g.orderMethod as Key)})`}
-            loading={busy === "order"}
-            onPress={() => run("order", () => api(`/groups/${g.id}/order`, { body: {} }))}
-          />
-        )}
-        {g.isOrganizer && g.status === "ORDERING" && g.memberships.every((m) => m.turn != null) && (
-          <Button title={t("start")} loading={busy === "start"} onPress={() => run("start", () => api(`/groups/${g.id}/start`, { body: {} }))} />
-        )}
-        {g.isOrganizer && g.demoMode && g.status === "ACTIVE" && (
-          <Button kind="ghost" title={`⏩ ${t("runEngine")}`} loading={busy === "tick"} onPress={() => run("tick", () => api(`/groups/${g.id}/tick`, { body: {} }))} />
-        )}
+  const invite = g.status === "FORMING" && (
+    <SteppedBox fill={c.surfaceAlt} step={5} style={{ padding: space(6), gap: space(3), alignItems: "flex-start" }}>
+      <P bold>{t("inviteShare")}</P>
+      <Text selectable style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 48 : 38, letterSpacing: 8, color: c.ink }}>
+        {g.inviteCode}
+      </Text>
+      {Platform.OS !== "web" && (
+        <Button compact kind="light" title={t("share")} left={<Icon name="compartir" size={16} color={c.ink} />} onPress={() => Share.share({ message: `Ayni, ${g.name}: ${g.inviteCode}` })} />
+      )}
+    </SteppedBox>
+  );
 
-        <Button title={`💬 ${t("chat")}`} onPress={() => router.push(`/groups/${g.id}/chat`)} />
-      </ScrollView>
+  const controls = g.isOrganizer && (
+    <View style={{ gap: space(3) }}>
+      {(g.status === "FORMING" || g.status === "ORDERING") && (
+        <Button kind="secondary" title={`${t("setOrder")}: ${t(g.orderMethod as Key)}`} loading={busy === "order"} onPress={() => run("order", () => api(`/groups/${g.id}/order`, { body: {} }))} />
+      )}
+      {g.status === "ORDERING" && g.memberships.every((m) => m.turn != null) && (
+        <Button title={t("start")} loading={busy === "start"} onPress={() => run("start", () => api(`/groups/${g.id}/start`, { body: {} }))} />
+      )}
+      {g.demoMode && g.status === "ACTIVE" && (
+        <Button kind="ghost" title={t("runEngine")} loading={busy === "tick"} onPress={() => run("tick", () => api(`/groups/${g.id}/tick`, { body: {} }))} />
+      )}
+    </View>
+  );
+
+  const links = (
+    <View style={{ borderTopWidth: 1, borderColor: c.line }}>
+      <LinkRow title={t("chat")} hint={t("chatHint")} onPress={() => router.push(`/groups/${g.id}/chat`)} />
+      <LinkRow title={t("aiLog")} hint={t("aiLogShort")} onPress={() => router.push(`/groups/${g.id}/ai-log`)} last={!g.isOrganizer} />
+      {g.isOrganizer && g.status === "FORMING" && <LinkRow title={t("publish")} hint={g.isOpen ? t("isOpenNow") : t("publishHint")} onPress={() => router.push(`/groups/${g.id}/admission`)} />}
+      {g.isOrganizer && g.status !== "FORMING" && <LinkRow title={t("checkDisputes")} hint={t("disputesHint")} onPress={() => router.push(`/groups/${g.id}/disputes`)} last />}
+    </View>
+  );
+
+  const roundPot = (r: Round) => r.contributions.reduce((s, x) => s + (x.status === "PAID" || x.status === "COVERED" ? x.amountCents + x.lateFeeCents : 0), 0);
+  const overlays = (
+    <>
+      {confetti > 0 && <Confetti key={confetti} onDone={() => setConfetti(0)} />}
+      {pot && (
+        <PotCelebration
+          round={pot.round.number}
+          groupName={g.name}
+          amountCents={Math.max(0, roundPot(pot.round) - Math.min(mine?.retentionHeldCents ?? 0, roundPot(pot.round)))}
+          guaranteeCents={Math.min(mine?.retentionHeldCents ?? 0, roundPot(pot.round))}
+          streak={pot.streak}
+          onClose={() => setPot(null)}
+          onPassport={() => {
+            setPot(null);
+            router.navigate("/profile");
+          }}
+        />
+      )}
     </>
   );
+
+  // ------------------------------------------------------------------ layouts
+
+  if (wide) {
+    return (
+      <View style={{ flex: 1 }}>
+        {/* the sidebar is the navigation on wide screens: no header bar repeating the name */}
+        <Stack.Screen options={{ title: g.name, headerShown: false }} />
+        <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space(10), paddingBottom: space(16) }}>
+          <View style={{ maxWidth: 1240, width: "100%", alignSelf: "center", gap: space(7) }}>
+            {header}
+            {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
+            <View style={{ flexDirection: "row", gap: space(8), alignItems: "flex-start" }}>
+              <View style={{ flex: 1, gap: space(7), minWidth: 0 }}>
+                {potCard}
+                {weave}
+                {invite}
+                {members}
+                {controls}
+              </View>
+              <View style={{ width: 380, gap: space(6) }}>
+                {payPanel}
+                {decisions}
+                {failed}
+                {links}
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+        {overlays}
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <Stack.Screen options={{ title: g.name, headerShown: false }} />
+      <View style={{ paddingTop: insets.top + space(3), paddingHorizontal: space(4), paddingBottom: space(3), backgroundColor: c.bg, gap: space(3) }}>{header}</View>
+      <Weave cell={3} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: space(4), gap: space(5), paddingBottom: space(8), maxWidth: 640, width: "100%", alignSelf: "center" }}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={() => load().catch(() => {})} />}
+      >
+        {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
+        {potCard}
+        {decisions}
+        {weave}
+        {!mustPay && payPanel}
+        {failed}
+        {invite}
+        {controls}
+        {members}
+        {links}
+      </ScrollView>
+      {/* phone: the payment stays within reach of the thumb, just above the tab bar */}
+      {mustPay && <View style={{ paddingHorizontal: space(3), paddingVertical: space(2), backgroundColor: c.bg, borderTopWidth: 1, borderColor: c.line }}>{payPanel}</View>}
+      {overlays}
+    </View>
+  );
+}
+
+function SegmentFill({ color, fresh }: { color: string; fresh: boolean }) {
+  const [w, setW] = useState(0);
+  return (
+    <View style={{ flex: 1 }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      {w > 0 && (
+        <WeaveIn fresh={fresh} delay={0}>
+          <WovenFill w={w} h={16} color={color} />
+        </WeaveIn>
+      )}
+    </View>
+  );
+}
+
+function joinNames(names: string[], and: string) {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`;
 }
