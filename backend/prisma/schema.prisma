@@ -93,6 +93,7 @@ model User {
   email          String // PayPal email: where payouts are sent
   name           String
   locale         String        @default("es")
+  country        String? // ISO 3166-1 alpha-2, where the person lives (pasanakus across countries)
   paypalVerified Boolean       @default(false) // logged in with a real PayPal account
   pushToken      String? // Expo push token (Android)
   createdAt      DateTime      @default(now())
@@ -109,6 +110,7 @@ model Group {
   organizer            User            @relation("organizer", fields: [organizerId], references: [id])
   contributionCents    Int
   currency             String          @default("USD")
+  country              String          @default("BO") // ISO 3166-1 alpha-2, where the group is based
   frequency            Frequency
   orderMethod          OrderMethod
   maxMembers           Int             @default(10)

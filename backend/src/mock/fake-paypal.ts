@@ -24,7 +24,10 @@ const batches = new Map<string, { batchId: string; email: string; amount: string
 const invoices = new Map<string, { total: string; email: string; status: string }>();
 const captures: { id: string; amount: string; description: string; createdAt: Date }[] = [];
 let seq = 0;
-const sim = (p: string) => `SIM-${p}-${(++seq).toString().padStart(4, "0")}`;
+// The mock database survives restarts but this counter does not: a per-run prefix keeps ids unique
+// (paypalInvoiceId, order and capture ids are unique columns).
+const RUN = Date.now().toString(36).slice(-4).toUpperCase();
+const sim = (p: string) => `SIM-${p}-${RUN}${(++seq).toString().padStart(4, "0")}`;
 const cents = (v: string) => Math.round(Number(v) * 100);
 
 function page(title: string, body: string) {

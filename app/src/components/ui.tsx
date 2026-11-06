@@ -12,6 +12,7 @@ import { AguayoBand } from "@/components/aguayo";
 import { Icon, type IconName } from "@/components/icons";
 import { SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
+import { Emblem } from "@/components/brand";
 
 /** Page container. Phones: full width with gutters. Wide web: a calm reading column. */
 export function Screen({ children, scroll = true, width = 640 }: { children: ReactNode; scroll?: boolean; width?: number }) {
@@ -281,9 +282,7 @@ export function Loading() {
   const { c } = useScheme();
   return (
     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.bg, gap: 16 }}>
-      <View style={{ width: 120 }}>
-        <Weave cell={4} motif="rombos" />
-      </View>
+      <Emblem size={88} />
       <ActivityIndicator color={c.fucsia.fill} />
     </View>
   );

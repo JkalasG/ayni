@@ -134,7 +134,7 @@ Todo se hace con Reanimated. Con movimiento reducido no hay movimiento: los elem
 | Pagar tu aporte | La puntada se teje en tu fila, con vibración suave y confeti de rombos | Hecho |
 | Ronda completa | La columna del tejido brilla en dorado y cae confeti de rombos | Hecho |
 | Recibir el pozo | Pantalla completa: se despliegan franjas tejidas, el monto cuenta hacia arriba y vibra en Android | Hecho |
-| El pozo llenándose | Una barra que se llena con hilos de colores, uno por aporte | Hecho |
+| El pozo llenándose | Una vasija tejida que se llena desde abajo con una banda de hilo por aporte. Cada banda cae solo cuando PayPal confirma el cobro, con vibración suave en Android; con movimiento reducido aparece llena sin animar | Hecho |
 | Racha y nivel nuevo | La racha se ve en el pasaporte y en la celebración; al subir de nivel, la insignia tejida se arma girando | Hecho |
 | Cambio de pantalla | Una franja de aguayo que barre la pantalla | Pendiente |
 

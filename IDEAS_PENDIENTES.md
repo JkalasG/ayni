@@ -4,7 +4,9 @@ Guía para retomar más adelante. Regla de oro: **cada cosa divertida debe mostr
 
 ---
 
-## 1. Cofre que se llena al pagar (prioridad alta)
+## 1. Cofre que se llena al pagar (prioridad alta) — HECHO
+
+> Implementado como vasija tejida en `app/src/components/vasija.tsx`, usada en el pozo del grupo y en `/demo`.
 
 **Qué es:** reemplazar la barra del pozo por un cofre (o vasija) que se llena de hilos y rombos de colores a medida que entran los aportes.
 
@@ -23,7 +25,9 @@ Guía para retomar más adelante. Regla de oro: **cada cosa divertida debe mostr
 
 ---
 
-## 2. Buscar pasanakus por país, con mapa (prioridad alta)
+## 2. Buscar pasanakus por país, con mapa (prioridad alta) — HECHO
+
+> `Group.country` y `User.country` en Prisma, país al crear grupo, filtro y mapa de mosaicos en Explorar (`app/src/components/country-map.tsx`), lista de países como texto, y tres grupos abiertos de la diáspora en el seed (MADRID, BAIRES, VIRGIN).
 
 **Qué es:** en Explorar, un mapa dibujado en SVG de Latinoamérica y de los países de la diáspora, con pines en los grupos abiertos y filtro por país.
 
@@ -39,7 +43,9 @@ Guía para retomar más adelante. Regla de oro: **cada cosa divertida debe mostr
 
 ---
 
-## 3. Caso entre países en el escenario de demo (opcional)
+## 3. Caso entre países en el escenario de demo (opcional) — HECHO
+
+> En el paso 5 de `/demo`, Tomás paga desde España y PayPal convierte EUR a USD.
 
 **Qué es:** agregar al escenario `/demo` un aporte desde otro país (por ejemplo, un miembro en España aportando a un pasanaku en Bolivia).
 

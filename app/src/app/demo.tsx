@@ -11,6 +11,7 @@ import { EventRow, PayPalChip, type PPEvent } from "@/components/paypal";
 import { SteppedBox, StepButton } from "@/components/stepped";
 import { Tejido } from "@/components/tejido";
 import { WovenAvatar, WovenEmblem } from "@/components/woven-avatar";
+import { Vasija } from "@/components/vasija";
 import { money } from "@/lib/api";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useLayout } from "@/lib/layout";
@@ -70,7 +71,7 @@ function Panel({ title, children, sim = true }: { title: string; children: React
   );
 }
 
-function Note({ icon, text, tone }: { icon: "aprobar" | "garantia" | "pagar" | "rechazar" | "pozo"; text: string; tone: "verde" | "turquesa" | "naranja" | "rojo" | "amarillo" }) {
+function Note({ icon, text, tone }: { icon: "aprobar" | "garantia" | "pagar" | "rechazar" | "pozo" | "lugar"; text: string; tone: "verde" | "turquesa" | "naranja" | "rojo" | "amarillo" }) {
   const { c } = useScheme();
   return (
     <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: c[tone].fill + "1F", padding: space(3) }}>
@@ -195,14 +196,20 @@ function OrganizerScreen({ step }: { step: number }) {
         <View style={{ gap: space(3) }}>
           <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>{t("dRoundOne")}</Text>
           <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 38, color: c.amarillo.text, fontVariant: ["tabular-nums"] }}>{money(6000)}</Text>
-          <View style={{ flexDirection: "row", gap: 4 }}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={{ flex: 1, height: 14, backgroundColor: i < settled ? (i === 3 ? c.turquesa.fill : c.verde.fill) : "transparent", borderWidth: i < settled ? 0 : 2, borderStyle: "dashed", borderColor: c.naranja.fill }} />
-            ))}
+          <View style={{ alignItems: "center" }}>
+            <Vasija
+              slots={[0, 1, 2, 3].map((i) => ({ id: `s${i}`, state: i < settled ? (i === 3 ? "COVERED" : "PAID") : "EMPTY" }))}
+              size={120}
+              animateFirst
+              ink={c.ink}
+              colors={{ paid: [c.verde.fill, c.fucsia.fill, c.naranja.fill], covered: c.turquesa.fill, late: c.rojo.fill, accent: c.surface, empty: c.line }}
+              label={`${t("vasijaLabel")}: ${settled} ${t("of")} 4 ${t("dPaidOf")}`}
+            />
           </View>
           <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: c.muted }}>
             {settled} {t("of")} 4 {t("dPaidOf")}
           </Text>
+          {step === 4 && <Note icon="lugar" tone="turquesa" text={t("dCrossBorder")} />}
           {step === 5 && <Note icon="rechazar" tone="rojo" text={t("dMissing")} />}
           {step >= 6 && <Note icon="garantia" tone="turquesa" text={t("dGuarUsed")} />}
           {step >= 7 && <Note icon="pozo" tone="amarillo" text={t("dPotSent")} />}
@@ -219,7 +226,7 @@ function useEvents(t: (k: Key) => string): PPEvent[] {
       { id: "e0", at: 0, step: 0, icon: "paypal", tone: "turquesa", title: t("dEvVerified"), detail: t("dEvVerifiedDetail") },
       { id: "e1", at: 0, step: 1, icon: "pagar", tone: "amarillo", title: t("dEvAuth"), detail: t("dEvAuthDetail"), amount: 1500, ref: "A91F3C" },
       { id: "e4a", at: 0, step: 4, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: "Marisol, " + t("round").toLowerCase() + " 1", amount: 1500, ref: "7D20B1" },
-      { id: "e4b", at: 0, step: 4, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: "Tomás, " + t("round").toLowerCase() + " 1", amount: 1500, ref: "C44E09" },
+      { id: "e4b", at: 0, step: 4, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: t("dEvFromSpain"), amount: 1500, ref: "C44E09" },
       { id: "e4c", at: 0, step: 4, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: "Wara, " + t("round").toLowerCase() + " 1", amount: 1500, ref: "A91F3C" },
       { id: "e5", at: 0, step: 5, icon: "rechazar", tone: "rojo", title: t("dEvDeclined"), detail: t("dEvDeclinedDetail"), amount: 1500 },
       { id: "e6", at: 0, step: 6, icon: "garantia", tone: "turquesa", title: t("ppGuarantee"), detail: "Don Efraín, " + t("round").toLowerCase() + " 1", amount: 1500 },

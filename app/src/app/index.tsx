@@ -8,6 +8,7 @@ import { Loading } from "@/components/ui";
 import { AguayoUnfold } from "@/components/aguayo";
 import { Altiplano } from "@/components/altiplano";
 import { Icon } from "@/components/icons";
+import { Emblem } from "@/components/brand";
 import { Controls } from "@/components/controls";
 import { StepButton } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
@@ -70,6 +71,7 @@ export default function Welcome() {
 
   const brand = (big: boolean) => (
     <View style={{ gap: big ? 18 : 10 }}>
+      <Emblem size={big ? 96 : 64} />
       <Text
         accessibilityRole="header"
         style={{ fontFamily: fonts.displayHeavy, fontSize: big ? 168 : 92, lineHeight: big ? 172 : 98, color: c.ink, letterSpacing: big ? -8 : -4, marginLeft: big ? -8 : -4 }}
@@ -171,7 +173,7 @@ export default function Welcome() {
       <View style={{ flex: 1, flexDirection: "row", backgroundColor: c.bg }}>
         {status}
         <Altiplano c={c} peopleHeight={300} mountainHeight={230} groundHeight={40} celestial={170} peopleInset={space(12)} style={{ flex: 1.3 }}>
-          <View style={{ padding: space(14), paddingTop: space(12) }}>{brand(true)}</View>
+          <View style={{ padding: space(14), paddingTop: space(9) }}>{brand(true)}</View>
         </Altiplano>
         <AguayoUnfold threads={c.threads} cell={4} vertical ground={c.bg} />
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, padding: space(12), gap: space(10) }}>
@@ -187,7 +189,7 @@ export default function Welcome() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.bg }} contentContainerStyle={{ flexGrow: 1 }}>
       {status}
-      <Altiplano c={c} peopleHeight={200} mountainHeight={120} groundHeight={16} celestial={64} style={{ height: 540 }}>
+      <Altiplano c={c} peopleHeight={200} mountainHeight={120} groundHeight={16} celestial={64} style={{ height: 620 }}>
         <SafeAreaView edges={["top"]} style={{ paddingHorizontal: space(5), paddingTop: space(4), gap: space(6) }}>
           <View style={{ alignItems: "flex-end" }}>
             <Controls />

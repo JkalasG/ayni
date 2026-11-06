@@ -7,14 +7,16 @@ import { useI18n } from "@/lib/i18n";
 import { api, ApiError } from "@/lib/api";
 import { AdmissionForm, admissionPayload, defaultAdmission } from "@/components/admission-form";
 import { colors, fonts } from "@/lib/theme";
+import { COUNTRIES, countryName, type Country } from "@/lib/countries";
 
 type Freq = "WEEKLY" | "BIWEEKLY" | "MONTHLY";
 type Method = "LOTTERY" | "AI" | "ORGANIZER";
 
 export default function NewGroup() {
   useScheme(); // re-render when the color mode changes
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [name, setName] = useState("");
+  const [country, setCountry] = useState<Country>("BO");
   const [amount, setAmount] = useState("20");
   const [frequency, setFrequency] = useState<Freq>("WEEKLY");
   const [orderMethod, setOrderMethod] = useState<Method>("AI");
@@ -33,6 +35,7 @@ export default function NewGroup() {
       const g = await api<{ id: string }>("/groups", {
         body: {
           name: name.trim(),
+          country,
           contributionCents: Math.round(parseFloat(amount.replace(",", ".")) * 100),
           frequency,
           orderMethod,
@@ -57,6 +60,7 @@ export default function NewGroup() {
       <Stack.Screen options={{ title: t("create") }} />
       <FormHeader icon="grupos" hint={t("newHint")} />
       <Field label={t("name")} value={name} onChangeText={setName} placeholder="Pasanaku de la familia" />
+      <Chips label={t("groupCountry")} value={country} onChange={setCountry} options={COUNTRIES.map((v) => ({ value: v, label: countryName(v, lang) }))} />
       <Field label={t("contribution")} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
       <Chips
         label={t("frequency")}

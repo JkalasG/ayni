@@ -36,7 +36,7 @@ export async function exploreOpenGroups(user: User) {
       include: {
         _count: { select: { memberships: true } },
         organizer: { select: { name: true } },
-        memberships: { where: { userId: user.id }, select: { id: true } },
+        memberships: { select: { userId: true, user: { select: { country: true } } } },
         joinRequests: { where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 1 },
       },
       orderBy: { createdAt: "desc" },
@@ -52,6 +52,9 @@ export async function exploreOpenGroups(user: User) {
         id: g.id,
         name: g.name,
         description: g.description,
+        country: g.country,
+        // where its members live, besides the group's own country: a pasanaku across borders
+        memberCountries: [...new Set(g.memberships.map((m) => m.user.country).filter((c): c is string => !!c && c !== g.country))],
         organizerName: g.organizer.name,
         contributionCents: g.contributionCents,
         frequency: g.frequency,
@@ -61,7 +64,7 @@ export async function exploreOpenGroups(user: User) {
         requireDeposit: g.requireDeposit,
         rules: rulesOf(g),
         check: checkAdmission(profile, rulesOf(g)),
-        isMember: g.memberships.length > 0,
+        isMember: g.memberships.some((m) => m.userId === user.id),
         myRequest: g.joinRequests[0] ? { id: g.joinRequests[0].id, status: g.joinRequests[0].status } : null,
       })),
   };

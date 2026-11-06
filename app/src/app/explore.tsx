@@ -6,6 +6,8 @@ import { Button, Field, Loading, Notice } from "@/components/ui";
 import { AguayoBand, type Motif } from "@/components/aguayo";
 import { Icon } from "@/components/icons";
 import { SteppedBox } from "@/components/stepped";
+import { CountryMap } from "@/components/country-map";
+import { countryName } from "@/lib/countries";
 import { type AdmissionCheck, type TrustProfile } from "@/components/trust";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -20,6 +22,8 @@ type OpenGroup = {
   id: string;
   name: string;
   description: string | null;
+  country: string;
+  memberCountries: string[];
   organizerName: string;
   contributionCents: number;
   frequency: string;
@@ -66,7 +70,7 @@ function verdict(g: OpenGroup, p: TrustProfile, t: (k: Key) => string, c: Palett
 }
 
 export default function Explore() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { me, loading } = useAuth();
   const { c } = useScheme();
   const { wide } = useLayout();
@@ -75,6 +79,7 @@ export default function Explore() {
   const [data, setData] = useState<{ profile: TrustProfile; groups: OpenGroup[] } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  const [country, setCountry] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
@@ -99,7 +104,7 @@ export default function Explore() {
   }, [status, t]);
 
   const shown = useMemo(() => {
-    const list = data?.groups ?? [];
+    const list = (data?.groups ?? []).filter((g) => !country || g.country === country || g.memberCountries.includes(country));
     switch (filter) {
       case "forMe":
         return list.filter((g) => g.check.meets);
@@ -111,7 +116,15 @@ export default function Explore() {
       default:
         return list;
     }
-  }, [data, filter]);
+  }, [data, filter, country]);
+
+  // a group counts in its own country and in every country its members pay from
+  const byCountry = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const g of data?.groups ?? []) for (const k of new Set([g.country, ...g.memberCountries])) out[k] = (out[k] ?? 0) + 1;
+    return out;
+  }, [data]);
+  const links = useMemo(() => (data?.groups ?? []).flatMap((g) => g.memberCountries.map((m) => [g.country, m] as [string, string])), [data]);
 
   const request = async (g: OpenGroup) => {
     setBusy(true);
@@ -149,6 +162,36 @@ export default function Explore() {
     { value: "newcomers", label: t("filterNewcomers") },
   ];
 
+  const countries = Object.keys(byCountry).sort((a, b) => byCountry[b] - byCountry[a] || countryName(a, lang).localeCompare(countryName(b, lang)));
+  const countryChip = (value: string | null, label: string) => {
+    const on = country === value;
+    return (
+      <Pressable key={value ?? "all"} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setCountry(value)}>
+        <SteppedBox fill={on ? c.turquesa.fill : c.surface} stroke={on ? c.turquesa.fill : c.line} step={3} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 14 }}>
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: on ? c.onAction : c.ink }}>{label}</Text>
+        </SteppedBox>
+      </Pressable>
+    );
+  };
+  const countrySection = data.groups.length > 0 && (
+    <SteppedBox fill={c.surface} stroke={c.line} step={6} style={{ padding: wide ? space(6) : space(4), gap: space(4) }}>
+      <View style={{ gap: space(3) }}>
+        <View style={{ gap: 4 }}>
+          <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>{t("byCountry")}</Text>
+          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: c.muted }}>{t("byCountryHint")}</Text>
+        </View>
+        {/* the same choice as text, for screen readers and anyone who prefers a list */}
+        <View accessibilityRole="radiogroup" accessibilityLabel={t("byCountry")} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {countryChip(null, t("allCountries"))}
+          {countries.map((k) => countryChip(k, `${countryName(k, lang)} ${byCountry[k]}`))}
+        </View>
+      </View>
+      <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <CountryMap counts={byCountry} links={links} selected={country} onSelect={setCountry} compact={!wide} />
+      </View>
+    </SteppedBox>
+  );
+
   const card = (g: OpenGroup, i: number) => {
     const v = verdict(g, data.profile, t, c);
     const reqs = requirements(g, data.profile, t);
@@ -174,6 +217,13 @@ export default function Explore() {
               <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>
                 {t("organizedBy")} {g.organizerName}
               </Text>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 4 }}>
+                <Icon name="lugar" size={13} color={c.turquesa.text} />
+                <Text style={{ flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.turquesa.text }}>
+                  {countryName(g.country, lang)}
+                  {g.memberCountries.length ? `, ${t("membersAlsoIn")} ${g.memberCountries.map((k) => countryName(k, lang)).join(", ")}` : ""}
+                </Text>
+              </View>
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 24, color: c.amarillo.text, fontVariant: ["tabular-nums"] }}>{money(g.contributionCents * g.maxMembers).replace(/\.00$/, "")}</Text>
@@ -184,6 +234,12 @@ export default function Explore() {
             {money(g.contributionCents)} {t(`per_${g.frequency}` as Key)}, {free} {t("of")} {g.maxMembers} {free === 1 ? t("seatFree") : t("seatsFree")}
           </Text>
           {g.description ? <Text style={{ fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: c.muted }}>{g.description}</Text> : null}
+          {g.memberCountries.length ? (
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, padding: space(3), backgroundColor: c.turquesa.fill + "1A", borderLeftWidth: 3, borderColor: c.turquesa.fill }}>
+              <Icon name="paypal" size={16} color={c.turquesa.text} />
+              <Text style={{ flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.ink }}>{t("crossBorderNote")}</Text>
+            </View>
+          ) : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
             {reqs.map((r) => (
               <View key={r.text} accessible accessibilityLabel={`${r.text}: ${r.ok ? t("met") : t("notMet")}`} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: (r.ok ? c.verde.fill : c.rojo.fill) + "1F" }}>
@@ -234,6 +290,7 @@ export default function Explore() {
             </Text>
             <Text style={{ fontFamily: fonts.body, fontSize: 16, lineHeight: 23, color: c.muted }}>{t("openPasanakusHint")}</Text>
           </View>
+          {countrySection}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} accessibilityRole="radiogroup">
             {filters.map((f) => {
               const on = filter === f.value;

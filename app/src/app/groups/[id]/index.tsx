@@ -5,12 +5,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { Badge, Button, LinkRow, Loading, Notice, P, Weave } from "@/components/ui";
 import { RuleChecklist, TrustCard, type TrustProfile } from "@/components/trust";
-import { Tejido, WeaveIn, WovenFill } from "@/components/tejido";
+import { Tejido } from "@/components/tejido";
 import { Confetti, PotCelebration } from "@/components/celebrations";
 import { Icon } from "@/components/icons";
 import { PayPalActivity, PayPalChip, type PPPayout } from "@/components/paypal";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
+import { Vasija } from "@/components/vasija";
+import { countryName } from "@/lib/countries";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useLayout } from "@/lib/layout";
@@ -57,7 +59,7 @@ type Member = {
   retentionPct: number;
   retentionHeldCents: number;
   isNewcomer: boolean;
-  user: { id: string; name: string };
+  user: { id: string; name: string; country?: string | null };
 };
 type Action = { id: string; type: string; summary: string; expiresAt: string; payload: any };
 type Group = {
@@ -67,6 +69,7 @@ type Group = {
   inviteCode: string;
   organizerId: string;
   contributionCents: number;
+  country: string;
   frequency: string;
   orderMethod: "LOTTERY" | "AI" | "ORGANIZER";
   demoMode: boolean;
@@ -95,6 +98,8 @@ const GOLD = "#FFC93C";
 const GOLD_INK = "#1A1A3A";
 const GOLD_SOFT = "#4D3B00";
 const GOLD_ALERT = "#7A2300";
+/** Threads that fill the vessel; fixed because the pot is always gold. */
+const VASIJA_COLORS = { paid: ["#D4106B", "#0E9A64", "#E06A00", "#5B2BB8", "#C2261F"], covered: "#06708A", late: "#7A2300", accent: GOLD, empty: "#1A1A3A30" };
 
 const firstName = (n: string) => n.replace(/^(Doña|Don)\s+/i, "").split(" ")[0];
 
@@ -111,13 +116,6 @@ export default function GroupScreen() {
   const [confetti, setConfetti] = useState(0);
   const [pot, setPot] = useState<{ round: Round; streak: number | null } | null>(null);
   const lastMine = useRef<string | null>(null);
-  // contributions already shown as paid in the pot bar, so only new ones weave in
-  const seenPaid = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    if (!g) return;
-    seenPaid.current = new Set(g.rounds.flatMap((r) => r.contributions.filter((x) => x.status !== "PENDING").map((x) => x.id)));
-  });
-
   const load = useCallback(async () => {
     setG(await api<Group>(`/groups/${id}`));
   }, [id]);
@@ -237,7 +235,13 @@ export default function GroupScreen() {
     </View>
   );
 
-  /** The pot, with a bar that fills with threads as contributions come in. */
+  const potAmount = (
+    <Text style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 72 : 54, lineHeight: wide ? 80 : 62, color: GOLD_INK, fontVariant: ["tabular-nums"], letterSpacing: -1 }}>
+      {money(g.potCents)}
+    </Text>
+  );
+
+  /** The pot, with a vessel that fills with threads as each PayPal payment is confirmed. */
   const potCard = (
     <SteppedBox fill={GOLD} step={6} style={{ padding: wide ? space(7) : space(5), gap: space(3) }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -253,49 +257,41 @@ export default function GroupScreen() {
           </Text>
         ) : null}
       </View>
-      <Text style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 76 : 54, lineHeight: wide ? 84 : 62, color: GOLD_INK, fontVariant: ["tabular-nums"], letterSpacing: -1 }}>
-        {money(g.potCents)}
-      </Text>
-      {current ? (
-        <Text style={{ fontFamily: fonts.body, fontSize: 17, color: GOLD_INK }}>
-          {isMyRound ? (
-            <Text style={{ fontFamily: fonts.bodyBold, color: GOLD_INK, textDecorationLine: "underline" }}>{t("youReceiveThisRound")}</Text>
+      {potAmount}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: space(4) }}>
+        <View style={{ flex: 1, gap: space(2) }}>
+          {current ? (
+            <Text style={{ fontFamily: fonts.body, fontSize: 17, color: GOLD_INK }}>
+              {isMyRound ? (
+                <Text style={{ fontFamily: fonts.bodyBold, color: GOLD_INK, textDecorationLine: "underline" }}>{t("youReceiveThisRound")}</Text>
+              ) : (
+                <>
+                  {t("thisRoundReceives")} <Text style={{ fontFamily: fonts.bodyBold, color: GOLD_INK, textDecorationLine: "underline" }}>{current.recipient.user.name}</Text>
+                </>
+              )}
+            </Text>
           ) : (
-            <>
-              {t("thisRoundReceives")} <Text style={{ fontFamily: fonts.bodyBold, color: GOLD_INK, textDecorationLine: "underline" }}>{current.recipient.user.name}</Text>
-            </>
+            <Text style={{ fontFamily: fonts.body, fontSize: 16, color: GOLD_SOFT }}>
+              {money(g.contributionCents)} {t(`per_${g.frequency}` as Key)}
+            </Text>
           )}
-        </Text>
-      ) : (
-        <Text style={{ fontFamily: fonts.body, fontSize: 16, color: GOLD_SOFT }}>
-          {money(g.contributionCents)} {t(`per_${g.frequency}` as Key)}
-        </Text>
-      )}
-      {current && (
-        <View style={{ gap: 8 }}>
-          <View
-            style={{ flexDirection: "row", gap: 4 }}
-            accessible
-            accessibilityRole="progressbar"
-            accessibilityLabel={`${settled} ${t("of")} ${current.contributions.length} ${t("contributionsIn")}`}
-            accessibilityValue={{ min: 0, max: current.contributions.length, now: settled }}
-          >
-            {[...current.contributions].sort((a, b) => Number(a.status === "PENDING") - Number(b.status === "PENDING")).map((x) => (
-              <View key={x.id} style={{ flex: 1, height: 16 }}>
-                {x.status === "PENDING" ? (
-                  <View style={{ flex: 1, borderWidth: 2, borderStyle: "dashed", borderColor: GOLD_INK }} />
-                ) : (
-                  <SegmentFill fresh={!!seenPaid.current && !seenPaid.current.has(x.id)} color={x.status === "COVERED" ? "#06708A" : x.status === "PAID" ? GOLD_INK : GOLD_SOFT} />
-                )}
-              </View>
-            ))}
-          </View>
-          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: GOLD_SOFT }}>
-            {settled} {t("of")} {current.contributions.length} {t("contributionsIn")}
-            {missing.length ? `, ${t("missing")} ${joinNames(missing, t("and"))}` : ""}
-          </Text>
+          {current && (
+            <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: GOLD_SOFT }}>
+              {settled} {t("of")} {current.contributions.length} {t("contributionsIn")}
+              {missing.length ? `, ${t("missing")} ${joinNames(missing, t("and"))}` : ""}
+            </Text>
+          )}
         </View>
-      )}
+        {current ? (
+          <Vasija
+            slots={current.contributions.map((x) => ({ id: x.id, state: x.status === "PENDING" ? "EMPTY" : x.status === "COVERED" ? "COVERED" : "PAID" }))}
+            size={wide ? 150 : 104}
+            ink={GOLD_INK}
+            colors={VASIJA_COLORS}
+            label={`${t("vasijaLabel")}: ${settled} ${t("of")} ${current.contributions.length} ${t("contributionsIn")}`}
+          />
+        ) : null}
+      </View>
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", borderTopWidth: 1, borderColor: GOLD_INK + "44", paddingTop: space(3) }}>
         <PayPalChip mode={g.paypalMode} />
         <Text style={{ flex: 1, minWidth: 160, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: GOLD_SOFT }}>{t("ppFlow")}</Text>
@@ -470,7 +466,7 @@ export default function GroupScreen() {
                 {m.userId === me.id ? ` (${t("you")})` : ""}
               </P>
               <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>
-                {[m.userId === g.organizerId ? t("organizer") : null, m.turn != null ? `${t("guarantee")} ${m.retentionPct}%` : null, m.isNewcomer ? t("newcomer") : null].filter(Boolean).join(", ")}
+                {[m.userId === g.organizerId ? t("organizer") : null, m.user.country && m.user.country !== g.country ? `${t("paysFrom")} ${countryName(m.user.country, lang)}` : null, m.turn != null ? `${t("guarantee")} ${m.retentionPct}%` : null, m.isNewcomer ? t("newcomer") : null].filter(Boolean).join(", ")}
               </Text>
             </View>
             {m.turn != null && (
@@ -609,19 +605,6 @@ export default function GroupScreen() {
       {/* phone: the payment stays within reach of the thumb, just above the tab bar */}
       {mustPay && <View style={{ paddingHorizontal: space(3), paddingVertical: space(2), backgroundColor: c.bg, borderTopWidth: 1, borderColor: c.line }}>{payPanel}</View>}
       {overlays}
-    </View>
-  );
-}
-
-function SegmentFill({ color, fresh }: { color: string; fresh: boolean }) {
-  const [w, setW] = useState(0);
-  return (
-    <View style={{ flex: 1 }} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
-      {w > 0 && (
-        <WeaveIn fresh={fresh} delay={0}>
-          <View style={{ width: w, height: 16, backgroundColor: color }} />
-        </WeaveIn>
-      )}
     </View>
   );
 }

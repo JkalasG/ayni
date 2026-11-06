@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Badge, Button } from "@/components/ui";
 import { AguayoBand, type Motif } from "@/components/aguayo";
 import { Controls } from "@/components/controls";
+import { Logo } from "@/components/brand";
 import { Icon } from "@/components/icons";
 import { People } from "@/components/altiplano";
 import { useAuth } from "@/lib/auth";
@@ -172,7 +173,8 @@ export default function Groups() {
               <Text style={{ fontFamily: fonts.body, fontSize: 16, color: c.muted }}>{t("myGroups")}</Text>
             </View>
             {!wide && (
-              <View style={{ alignItems: "flex-end" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Logo size={24} />
                 <Controls compact />
               </View>
             )}

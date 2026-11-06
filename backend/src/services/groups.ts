@@ -38,6 +38,7 @@ export async function createGroup(
   user: User,
   input: {
     name: string;
+    country?: string;
     contributionCents: number;
     frequency: Frequency;
     orderMethod: OrderMethod;
@@ -239,7 +240,7 @@ export async function groupDetail(user: User, groupId: string) {
   const group = await db.group.findUnique({
     where: { id: groupId },
     include: {
-      memberships: { include: { user: { select: { id: true, name: true } } }, orderBy: { turn: "asc" } },
+      memberships: { include: { user: { select: { id: true, name: true, country: true } } }, orderBy: { turn: "asc" } },
       rounds: {
         orderBy: { number: "asc" },
         include: { contributions: true, recipient: { include: { user: { select: { name: true } } } } },

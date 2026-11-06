@@ -17,6 +17,8 @@ import "dotenv/config";
 import { db } from "./db";
 
 const NAMES = ["Doña Rosa", "Juan Carlos", "Marisol", "Don Efraín", "Wara", "Tomás", "Kusi"];
+// Where each one lives: Juan Carlos works in Madrid, Don Efraín in Buenos Aires, Wara in Virginia.
+const COUNTRY = ["BO", "ES", "BO", "AR", "US", "BO", "PE"];
 const DAY = 86_400_000;
 
 async function main() {
@@ -30,11 +32,12 @@ async function main() {
     users.push(
       await db.user.upsert({
         where: { paypalUserId: `demo-${i + 1}` },
-        update: { email, name: NAMES[i], paypalVerified: true },
+        update: { email, name: NAMES[i], paypalVerified: true, country: COUNTRY[i] },
         create: {
           paypalUserId: `demo-${i + 1}`,
           email,
           name: NAMES[i],
+          country: COUNTRY[i],
           paypalVerified: true,
           createdAt: new Date(Date.now() - (i === 6 ? 2 : 200) * DAY),
         },
@@ -103,6 +106,74 @@ async function main() {
       },
     });
     console.log('Open group "Pasanaku abierto de la feria" created (log in as Tomás or Kusi and use Explore).');
+  }
+
+  // ---------------------------------------------------------- open groups across borders
+  // The diaspora: PayPal moves the money between countries, which a local bank cannot do.
+  const abroad = [
+    {
+      code: "MADRID",
+      name: "Pasanaku Madrid–La Paz",
+      description: "Bolivianos en Madrid y sus familias en La Paz. Cada quien aporta desde su país con PayPal.",
+      country: "ES",
+      organizer: juan,
+      members: [juan, rosa],
+      contributionCents: 3000,
+      frequency: "MONTHLY" as const,
+      minCompleted: 1,
+      minOnTimePct: 80,
+      acceptNewcomers: true,
+    },
+    {
+      code: "BAIRES",
+      name: "Pasanaku de la colectividad en Buenos Aires",
+      description: "Para la comunidad boliviana en Buenos Aires y quienes la apoyan desde Bolivia.",
+      country: "AR",
+      organizer: efrain,
+      members: [efrain, marisol],
+      contributionCents: 1500,
+      frequency: "WEEKLY" as const,
+      minCompleted: 0,
+      minOnTimePct: 0,
+      acceptNewcomers: true,
+    },
+    {
+      code: "VIRGIN",
+      name: "Pasanaku de la diáspora en Virginia",
+      description: "Familias bolivianas en Estados Unidos y España. Pedimos historial puntual.",
+      country: "US",
+      organizer: wara,
+      members: [wara, juan],
+      contributionCents: 5000,
+      frequency: "MONTHLY" as const,
+      minCompleted: 2,
+      minOnTimePct: 90,
+      acceptNewcomers: false,
+    },
+  ];
+  for (const a of abroad) {
+    if (await db.group.findUnique({ where: { inviteCode: a.code } })) continue;
+    await db.group.create({
+      data: {
+        name: a.name,
+        description: a.description,
+        inviteCode: a.code,
+        country: a.country,
+        organizerId: a.organizer.id,
+        contributionCents: a.contributionCents,
+        frequency: a.frequency,
+        orderMethod: "LOTTERY",
+        maxMembers: 6,
+        isOpen: true,
+        admissionMode: "AI",
+        minCompleted: a.minCompleted,
+        minOnTimePct: a.minOnTimePct,
+        maxLate: null,
+        acceptNewcomers: a.acceptNewcomers,
+        requireDeposit: true,
+        memberships: { create: a.members.map((u) => ({ userId: u.id })) },
+      },
+    });
   }
 }
 

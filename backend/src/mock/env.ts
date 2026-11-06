@@ -25,7 +25,8 @@ export async function prepareMockEnv() {
   execSync("npx prisma db push --skip-generate", { cwd: ROOT, env, stdio: "ignore" });
 
   const { db } = await import("../db");
-  if ((await db.user.count()) === 0) {
+  // the seed is idempotent: it also runs when a newer version added demo data (the groups abroad)
+  if ((await db.user.count()) === 0 || !(await db.group.findUnique({ where: { inviteCode: "MADRID" } }))) {
     console.log("   seeding demo data…");
     execSync("npx tsx src/seed.ts", { cwd: ROOT, env, stdio: "inherit" });
   }

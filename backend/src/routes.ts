@@ -80,12 +80,15 @@ router.post(
   })
 );
 
+/** Countries Ayni groups can be based in: Latin America and the main destinations of its diaspora. */
+export const COUNTRIES = ["AR", "BO", "BR", "CL", "CO", "EC", "MX", "PE", "PY", "US", "ES", "IT"] as const;
+
 router.get("/me", ...authed(async (req, res) => res.json(req.user)));
 router.patch(
   "/me",
   ...authed(async (req, res) => {
-    const { locale } = z.object({ locale: z.enum(["es", "en"]) }).parse(req.body);
-    res.json(await db.user.update({ where: { id: req.user.id }, data: { locale } }));
+    const data = z.object({ locale: z.enum(["es", "en"]).optional(), country: z.enum(COUNTRIES).nullable().optional() }).parse(req.body);
+    res.json(await db.user.update({ where: { id: req.user.id }, data }));
   })
 );
 router.get("/me/profile", ...authed(async (req, res) => res.json(await trustProfile(req.user.id))));
@@ -104,6 +107,7 @@ router.post(
 
 const createSchema = z.object({
   name: z.string().min(2).max(60),
+  country: z.enum(COUNTRIES).default("BO"),
   contributionCents: z.number().int().min(100).max(1_000_000),
   frequency: z.enum(["WEEKLY", "BIWEEKLY", "MONTHLY"]),
   orderMethod: z.enum(["LOTTERY", "AI", "ORGANIZER"]),

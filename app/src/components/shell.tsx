@@ -4,6 +4,7 @@ import { router, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AguayoBand } from "@/components/aguayo";
 import { Icon, type IconName } from "@/components/icons";
+import { Logo } from "@/components/brand";
 import { useAuth } from "@/lib/auth";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useLayout } from "@/lib/layout";
@@ -169,8 +170,8 @@ function Sidebar() {
     <View style={{ width: 280, flexDirection: "row", backgroundColor: loom }}>
       <View style={{ flex: 1, paddingVertical: space(7), paddingHorizontal: space(3), gap: space(6) }}>
         <Pressable onPress={() => router.navigate("/groups")} accessibilityRole="link" accessibilityLabel="Ayni" style={{ paddingHorizontal: 14 }}>
-          <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 40, color: light, letterSpacing: -2 }}>ayni</Text>
-          <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: soft }}>{t("ayniMotto")}</Text>
+          <Logo size={40} tone="dark" />
+          <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: soft, marginTop: 6 }}>{t("ayniMotto")}</Text>
         </Pressable>
 
         <View style={{ gap: 2 }}>
