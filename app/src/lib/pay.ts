@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { api } from "./api";
+import { payInPopup, popupReady } from "./paypal-sdk";
 
 export type PayResult = "paid" | "deposit" | "cancelled" | "error" | "dismissed";
 
@@ -25,8 +26,9 @@ export async function openPayPal(approveUrl: string, redirect: string): Promise<
   return status === "paid" || status === "deposit" || status === "cancelled" ? status : "error";
 }
 
-/** Pay one contribution with PayPal Checkout. */
+/** Pay one contribution with PayPal Checkout. Web: popup over the app. Native / fallback: approval page. */
 export async function payContribution(contributionId: string, groupId: string): Promise<PayResult> {
+  if (popupReady()) return payInPopup(contributionId); // nothing awaited before this: the popup needs the click
   const redirect = returnUrl(`groups/${groupId}`);
   const { approveUrl } = await api<{ approveUrl: string }>(`/contributions/${contributionId}/checkout`, {
     body: { redirect },

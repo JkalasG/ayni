@@ -8,7 +8,7 @@ import { RuleChecklist, TrustCard, type TrustProfile } from "@/components/trust"
 import { Tejido } from "@/components/tejido";
 import { Confetti, PotCelebration } from "@/components/celebrations";
 import { Icon } from "@/components/icons";
-import { PayPalActivity, PayPalChip, type PPPayout } from "@/components/paypal";
+import { PayPalActivity, PayPalChip, PayPalWordmark, type PPPayout } from "@/components/paypal";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
 import { Vasija } from "@/components/vasija";
@@ -19,6 +19,7 @@ import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { api, ApiError, money } from "@/lib/api";
 import { payContribution } from "@/lib/pay";
+import { preloadPayPal } from "@/lib/paypal-sdk";
 import { getFlag, setFlag } from "@/lib/flags";
 import { fonts, space, type Palette } from "@/lib/theme";
 
@@ -134,6 +135,11 @@ export default function GroupScreen() {
     if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     AccessibilityInfo.announceForAccessibility?.(t("paymentReceived"));
   }, [t]);
+
+  // Warm up the PayPal popup (web) so it can open straight from the click
+  useEffect(() => {
+    preloadPayPal();
+  }, []);
 
   // Web returns here from PayPal with ?status=paid|cancelled|error
   useEffect(() => {
@@ -336,11 +342,12 @@ export default function GroupScreen() {
       )}
       {mustPay && (
         <StepButton
-          title={`${t("payWith")} ${money(payAmount)} ${t("withPayPal")}`}
+          title={`${t("payWith")} ${money(payAmount)}`}
+          accessibilityLabel={`${t("payWith")} ${money(payAmount)} ${t("withPayPal")}`}
           fill={c.paypal}
           ink={c.paypalInk}
           loading={busy === "pay"}
-          left={<Icon name="pagar" size={20} color={c.paypalInk} />}
+          right={<PayPalWordmark size={22} />}
           onPress={pay}
         />
       )}

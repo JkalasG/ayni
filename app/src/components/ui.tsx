@@ -128,6 +128,7 @@ export function Button({
   compact,
   accessibilityLabel,
   left,
+  right,
 }: {
   title: string;
   onPress: () => void;
@@ -137,6 +138,7 @@ export function Button({
   compact?: boolean;
   accessibilityLabel?: string;
   left?: ReactNode;
+  right?: ReactNode;
 }) {
   const { c } = useScheme();
   const off = !!disabled && !loading;
@@ -172,6 +174,7 @@ export function Button({
           >
             {left}
             {label}
+            {right}
           </SteppedBox>
         )
       }

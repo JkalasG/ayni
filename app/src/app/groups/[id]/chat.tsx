@@ -8,6 +8,8 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { payContribution } from "@/lib/pay";
+import { preloadPayPal } from "@/lib/paypal-sdk";
+import { PayPalWordmark } from "@/components/paypal";
 import { colors, radius, fonts } from "@/lib/theme";
 
 type Msg = { id: string; role: "user" | "assistant" | "system"; userId: string | null; authorName: string | null; content: string };
@@ -25,6 +27,10 @@ export default function Chat() {
   const list = useRef<FlatList<Msg>>(null);
 
   const load = useCallback(async () => setMsgs(await api<Msg[]>(`/groups/${id}/chat`)), [id]);
+
+  useEffect(() => {
+    preloadPayPal();
+  }, []);
 
   useEffect(() => {
     load().catch(() => {});
@@ -67,10 +73,12 @@ export default function Chat() {
                   <Button
                     key={a.contributionId}
                     kind="paypal"
-                    title={`${t("payNow")} · $${a.amount}`}
+                    title={`${t("payWith")} · $${a.amount}`}
+                    accessibilityLabel={`${t("payNow")} · $${a.amount}`}
+                    right={<PayPalWordmark size={20} />}
                     onPress={async () => {
-                      await payContribution(a.contributionId, id);
-                      setActions([]);
+                      const r = await payContribution(a.contributionId, id);
+                      if (r === "paid") setActions([]);
                       load();
                     }}
                   />

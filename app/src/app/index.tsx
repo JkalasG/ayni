@@ -12,7 +12,7 @@ import { Emblem } from "@/components/brand";
 import { Controls } from "@/components/controls";
 import { StepButton } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
-import { PayPalChip } from "@/components/paypal";
+import { PayPalChip, PayPalWordmark } from "@/components/paypal";
 import { useAuth } from "@/lib/auth";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useLayout } from "@/lib/layout";
@@ -91,11 +91,12 @@ export default function Welcome() {
       </View>
       <View style={{ gap: space(3) }}>
         <StepButton
-          title={t("loginPaypal")}
+          title={t("loginWith")}
+          accessibilityLabel={t("loginPaypal")}
           fill={c.paypal}
           ink={c.paypalInk}
           loading={busy === "pp"}
-          left={<Icon name="pagar" size={20} color={c.paypalInk} />}
+          right={<PayPalWordmark size={22} />}
           onPress={() => login("pp", loginWithPayPal)}
         />
         <StepButton

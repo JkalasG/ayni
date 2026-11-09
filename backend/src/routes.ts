@@ -22,7 +22,7 @@ import {
   updateAdmission,
   HttpError,
 } from "./services/groups";
-import { completeContribution, completeInvoice, retryPayout, startCheckout } from "./services/payments";
+import { captureForMember, completeContribution, completeInvoice, retryPayout, startCheckout } from "./services/payments";
 import { resolveAction } from "./services/actions";
 import { tickGroup } from "./services/engine";
 import { completeDeposit, exploreOpenGroups, myRequest, requestToJoin } from "./services/admission";
@@ -236,8 +236,26 @@ router.post(
 router.post(
   "/contributions/:id/checkout",
   ...authed(async (req, res) => {
-    const { redirect } = z.object({ redirect: z.string() }).parse(req.body);
-    res.json(await startCheckout(req.user, req.params.id, redirect));
+    const { redirect, popup } = z.object({ redirect: z.string(), popup: z.boolean().optional() }).parse(req.body);
+    res.json(await startCheckout(req.user, req.params.id, redirect, popup === true));
+  })
+);
+
+/** Popup flow (JS SDK v6): the buyer approved in the popup, now capture. */
+router.post(
+  "/contributions/:id/capture",
+  ...authed(async (req, res) => {
+    const { orderId } = z.object({ orderId: z.string().min(5).max(64) }).parse(req.body);
+    res.json(await captureForMember(req.user, req.params.id, orderId));
+  })
+);
+
+/** What the web app needs to open PayPal in a popup. Mock mode has no real SDK: the app falls back to the redirect. */
+router.get(
+  "/paypal/sdk-config",
+  ...authed(async (_req, res) => {
+    if (config.mode === "mock") return res.json({ enabled: false });
+    res.json({ enabled: true, sdkUrl: paypal.sdkUrl, clientId: paypal.publicClientId });
   })
 );
 

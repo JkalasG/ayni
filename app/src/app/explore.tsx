@@ -15,6 +15,7 @@ import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { api, ApiError, money } from "@/lib/api";
 import { openPayPal, returnUrl } from "@/lib/pay";
+import { PayPalWordmark } from "@/components/paypal";
 import { fonts, space, type Palette } from "@/lib/theme";
 
 type Rules = { minCompleted: number; minOnTimePct: number; maxLate: number | null; acceptNewcomers: boolean };
@@ -267,6 +268,7 @@ export default function Explore() {
                 kind={g.requireDeposit ? "paypal" : "primary"}
                 title={g.requireDeposit ? `${t("requestJoin")}, ${money(g.contributionCents)}` : t("sendRequest")}
                 loading={busy}
+                right={g.requireDeposit ? <PayPalWordmark size={20} /> : undefined}
                 onPress={() => request(g)}
               />
             </View>

@@ -12,6 +12,16 @@ import { useI18n, type Key } from "@/lib/i18n";
 import { useScheme } from "@/lib/scheme";
 import { fonts, space } from "@/lib/theme";
 
+/** "PayPal" in its two brand blues: the cue that the next step happens inside PayPal. */
+export function PayPalWordmark({ size = 20 }: { size?: number }) {
+  return (
+    <Text accessibilityElementsHidden importantForAccessibility="no" style={{ fontFamily: fonts.bodyBold, fontStyle: "italic", fontSize: size, letterSpacing: -0.5 }}>
+      <Text style={{ color: "#003087" }}>Pay</Text>
+      <Text style={{ color: "#009CDE" }}>Pal</Text>
+    </Text>
+  );
+}
+
 /** PayPal yellow chip: who moves the money, and whether this is simulated. */
 export function PayPalChip({ mode, label }: { mode?: "live" | "mock"; label?: string }) {
   const { c } = useScheme();

@@ -54,6 +54,7 @@ export function StepButton({
   stroke,
   loading,
   left,
+  right,
   accessibilityLabel,
   expanded,
 }: {
@@ -64,6 +65,7 @@ export function StepButton({
   stroke?: string;
   loading?: boolean;
   left?: ReactNode;
+  right?: ReactNode;
   accessibilityLabel?: string;
   expanded?: boolean;
 }) {
@@ -96,6 +98,7 @@ export function StepButton({
           >
             {left}
             <Text style={{ fontFamily: fonts.bodyBold, fontSize: 17.5, color: ink }}>{loading ? "…" : title}</Text>
+            {right}
           </SteppedBox>
         </Animated.View>
       )}

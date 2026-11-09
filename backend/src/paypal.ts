@@ -24,6 +24,10 @@ async function appToken(): Promise<string> {
   return json.access_token;
 }
 
+/** The client id is public by design (it identifies the app to the browser SDK); the secret never leaves the server. */
+export const publicClientId = clientId;
+export const sdkUrl = `${webBase}/web-sdk/v6/core`;
+
 export class PayPalError extends Error {
   constructor(public op: string, public status: number, public body: string) {
     super(`PayPal ${op} failed (${status}): ${body.slice(0, 500)}`);
@@ -55,6 +59,8 @@ export async function createOrder(p: {
   locale?: string;
   /** AUTHORIZE = hold the money without charging it (admission deposit). */
   intent?: "CAPTURE" | "AUTHORIZE";
+  /** Popup (JS SDK v6): the order carries no redirect urls; the SDK reports the approval to the page. */
+  popup?: boolean;
 }): Promise<{ id: string; approveUrl: string }> {
   const intent = p.intent ?? "CAPTURE";
   const order = await call<{ id: string; links: { rel: string; href: string }[] }>("createOrder", "/v2/checkout/orders", {
@@ -70,23 +76,27 @@ export async function createOrder(p: {
           amount: { currency_code: "USD", value: formatUSD(p.amountCents) },
         },
       ],
-      payment_source: {
-        paypal: {
-          experience_context: {
-            brand_name: "Ayni",
-            user_action: "PAY_NOW",
-            shipping_preference: "NO_SHIPPING",
-            locale: p.locale === "en" ? "en-US" : "es-ES",
-            return_url: p.returnUrl,
-            cancel_url: p.cancelUrl,
-          },
-        },
-      },
+      ...(p.popup
+        ? {}
+        : {
+            payment_source: {
+              paypal: {
+                experience_context: {
+                  brand_name: "Ayni",
+                  user_action: "PAY_NOW",
+                  shipping_preference: "NO_SHIPPING",
+                  locale: p.locale === "en" ? "en-US" : "es-ES",
+                  return_url: p.returnUrl,
+                  cancel_url: p.cancelUrl,
+                },
+              },
+            },
+          }),
     }),
   });
   const link = order.links.find((l) => l.rel === "payer-action" || l.rel === "approve");
-  if (!link) throw new PayPalError("createOrder", 500, "No approval link returned");
-  return { id: order.id, approveUrl: link.href };
+  if (!link && !p.popup) throw new PayPalError("createOrder", 500, "No approval link returned");
+  return { id: order.id, approveUrl: link?.href ?? "" };
 }
 
 export async function captureOrder(orderId: string): Promise<{ status: string; captureId?: string; customId?: string }> {

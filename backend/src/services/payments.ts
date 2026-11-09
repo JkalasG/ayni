@@ -13,7 +13,7 @@ import { HttpError } from "./errors";
 import { notify, postToGroupChat } from "./notify";
 
 /** Member wants to pay their contribution: create a PayPal order and return the approval URL. */
-export async function startCheckout(user: User, contributionId: string, appRedirect: string) {
+export async function startCheckout(user: User, contributionId: string, appRedirect: string, popup = false) {
   if (!isAllowedRedirect(appRedirect)) throw new HttpError(400, "redirect_not_allowed");
   const c = await db.contribution.findUnique({
     where: { id: contributionId },
@@ -35,9 +35,19 @@ export async function startCheckout(user: User, contributionId: string, appRedir
     returnUrl: `${config.publicApiUrl}/paypal/return?state=${encodeURIComponent(state)}`,
     cancelUrl: appendQuery(appRedirect, { status: "cancelled" }),
     locale: user.locale,
+    popup,
   });
   await db.contribution.update({ where: { id: c.id }, data: { paypalOrderId: order.id } });
-  return { approveUrl: order.approveUrl, amountCents: c.amountCents + fee, lateFeeCents: fee };
+  return { approveUrl: order.approveUrl, orderId: order.id, amountCents: c.amountCents + fee, lateFeeCents: fee };
+}
+
+/** Popup flow: the page says the buyer approved `orderId`. Only the owner of that contribution can capture it. */
+export async function captureForMember(user: User, contributionId: string, orderId: string) {
+  const c = await db.contribution.findUnique({ where: { id: contributionId }, include: { membership: true } });
+  if (!c || c.membership.userId !== user.id) throw new HttpError(404, "not_found");
+  if (c.paypalOrderId !== orderId) throw new HttpError(409, "order_mismatch");
+  await completeContribution(orderId); // idempotent: a webhook may have captured it first
+  return { status: "paid" as const };
 }
 
 /** Called when PayPal redirects back, and again (idempotently) by the webhook. */
