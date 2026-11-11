@@ -47,6 +47,18 @@ Ayni keeps the tradition and fixes both problems: a **staggered guarantee** prot
 
 **Resilience:** without an `ANTHROPIC_API_KEY` (or if Claude fails), every feature falls back to deterministic rules and templates, and the app keeps working.
 
+**Privacy of the assistant:** a member's questions to Ayni and its answers are private to that member (they talk about that person's money). Messages from other members are treated as data, never as instructions.
+
+### MCP server (read-only)
+
+A member can give their **own** AI assistant (Claude or any MCP client) a read-only key and ask "how much do I owe?" or "show my payments". `npm run mcp` in `backend/` starts an MCP server over stdio with 6 read tools (my circles, circle status, my payments, circle payment history, my claims, my trust profile). The key (`Passport → Connect my AI assistant`) can only `GET` an explicit allowlist of routes, never the private chat or any write, cannot create other keys, and can be revoked at once. It sees what the member sees in the app.
+
+## Also in the app
+
+- **Payment history** per circle and for each person ("My payments"), with PayPal references, the PayPal fee on each capture, and a *Verified with PayPal* card. Members see full detail only for their own payments.
+- **Group chat** between members, with cards for what happened (paid, pot sent…). The author or the organizer can hide a message; there is a rate limit and text sanitizing.
+- **Claims**: a member reports a problem with one of their contributions; the organizer refunds it or explains. If the member opens a PayPal dispute, it attaches to the same claim and PayPal's decision is written there.
+
 ## Where PayPal is used
 
 | PayPal capability | Use in Ayni |
@@ -56,8 +68,13 @@ Ayni keeps the tradition and fixes both problems: a **staggered guarantee** prot
 | Orders v2 (AUTHORIZE) + Payments v2: capture / void | Admission deposit for open circles |
 | Payouts | Sending the pot, returning guarantees, compensating short pots; failed payouts can be retried |
 | Invoicing v2 | Formal invoice for overdue contributions (cancelled automatically when paid another way) |
-| Disputes v1 | Disputes on the group's contributions, summarized for the organizer and available to the mediator |
-| Webhooks (verified signature) | Captures, deposits, payout status, paid invoices, new disputes |
+| Disputes v1 | Disputes on the group's contributions, summarized for the organizer and available to the mediator; each one is linked to the member's claim in Ayni through the capture id |
+| Payments v2: refunds | Cancelling a circle before it starts refunds the deposits; a member's claim can refund a contribution while the pot has not left; a duplicate charge is refunded at once |
+| Vault v3 (saved payment method) | Optional automatic contributions: the member saves their PayPal while paying, is **told before every charge**, and can turn it off or delete it any time |
+| Payouts to `PAYPAL_ID` | Pots go to the PayPal account that logged in, not to an email that could change |
+| Balances (reporting) | Before a pot leaves, the platform balance is checked; if PayPal says it is short, nothing is sent |
+| Transaction Search (reporting) | Daily reconciliation: Ayni's recorded charges are compared with PayPal's, and differences reach the organizer |
+| Webhooks (verified signature) | Captures, refunds and reversals, denied payments, deposit holds, payout status (including *unclaimed* ≠ failed), paid invoices, disputes (created / updated / resolved), vault tokens |
 
 ## Architecture
 
@@ -121,7 +138,9 @@ npx expo start                # scan the QR with Expo Go (Android), or press "w"
 PayPal setup (sandbox, developer.paypal.com → Apps & Credentials → your app):
 - Enable **Log in with PayPal**, with return URL `<PUBLIC_API_URL>/auth/paypal/callback` and the Email scope.
 - Enable **Payouts**, **Invoicing** and **Disputes** in the app features.
-- Add a webhook to `<PUBLIC_API_URL>/paypal/webhook` with these events, and copy its ID to `PAYPAL_WEBHOOK_ID`: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED`, `PAYMENT.PAYOUTS-ITEM.UNCLAIMED`, `INVOICING.INVOICE.PAID`, `CUSTOMER.DISPUTE.CREATED`.
+- Add a webhook to `<PUBLIC_API_URL>/paypal/webhook` with these events, and copy its ID to `PAYPAL_WEBHOOK_ID`: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED`, `PAYMENT.PAYOUTS-ITEM.UNCLAIMED`, `INVOICING.INVOICE.PAID`, `CUSTOMER.DISPUTE.CREATED`, `CUSTOMER.DISPUTE.UPDATED`, `CUSTOMER.DISPUTE.RESOLVED`, `PAYMENT.CAPTURE.REFUNDED`, `PAYMENT.CAPTURE.REVERSED`, `PAYMENT.CAPTURE.DENIED`, `PAYMENT.AUTHORIZATION.VOIDED`, `VAULT.PAYMENT-TOKEN.CREATED`, `VAULT.PAYMENT-TOKEN.DELETED`, and the other `PAYMENT.PAYOUTS-ITEM.*` states.
+- Optional features that need enabling on the PayPal app: **Vault** (automatic contributions), **Transaction Search** (daily reconciliation) and **Balances** (balance check). Without them Ayni keeps working: automatic payment simply is not offered, the reconciliation card says it is unavailable, and the balance check is skipped.
+- After pulling new code, run `npx prisma db push` in `backend/` (the changes only add tables and columns).
 
 PayPal must be able to reach `PUBLIC_API_URL`, so use a deployed URL (see `render.yaml`) or a tunnel.
 
@@ -129,8 +148,10 @@ Tests:
 
 ```bash
 cd backend
-npm test                                                   # money rules
+npm test                                                   # unit tests: money rules, ledger, chat, reconciliation, MCP access…
+npm run test:mcp                                           # starts the real MCP server and talks to it over the protocol
 E2E_DATABASE_URL=postgresql://.../ayni_e2e npm run test:e2e   # full flows, needs an EMPTY database
+npm run mock:reset && npm run dev   # then, in another terminal:  npm run test:smoke   (every endpoint, mock mode)
 ```
 
 Android APK: `cd app && npx eas init && npx eas build -p android --profile preview` (set `EXPO_PUBLIC_API_URL` in `eas.json`). Push notifications in the APK also need FCM credentials (`npx eas credentials`).
@@ -150,9 +171,8 @@ Or use **"Enter as a demo member"** on the welcome screen:
 
 ## Roadmap
 
-- Automatic contributions with PayPal Subscriptions
-- PayPal Agent Toolkit (MCP) for the assistant, restricted to read-only tools
-- Ledger reconciliation with Transaction Search
+- Reconcile payouts too (today the daily check covers incoming charges only)
+- Recording cash contributions is left out on purpose: money outside PayPal would break "money in = money out"
 - Group voting on AI-proposed orders, and a WhatsApp channel for reminders
 - In production, holding funds for a group requires money-transmission licensing; a regulated partner or PayPal's platform/marketplace products would be the path forward.
 

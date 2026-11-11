@@ -167,6 +167,31 @@ const ev = { id: 'WH-SMOKE-1', event_type: 'CUSTOMER.DISPUTE.CREATED', resource:
 r = await call('POST', '/paypal/webhook', { body: { id: 'WH-SMOKE-2', event_type: 'SOMETHING.UNKNOWN', resource: {} } }); ok('POST /paypal/webhook unsigned event rejected (400)', r.status === 400, r.status);
 r = await call('POST', '/paypal/webhook', { body: { id: 'WH-SMOKE-2', event_type: 'SOMETHING.UNKNOWN', resource: {} } }); ok('POST /paypal/webhook still rejected on repeat', r.status === 400, r.status);
 
+// --- payment history, claims, automatic payment, reconciliation, read-only key
+r = await call('GET', `/groups/${familia.id}/ledger`, { token: rosa }); ok('GET /groups/:id/ledger', r.status === 200 && Array.isArray(r.json.entries) && !!r.json.totals, r.status);
+r = await call('GET', `/groups/${familia.id}/ledger`, { token: kusi }); ok('GET ledger non-member -> 403', r.status === 403, r.status);
+r = await call('GET', '/me/payments', { token: rosa }); ok('GET /me/payments', r.status === 200 && !!r.json.totals, r.status);
+r = await call('GET', `/groups/${familia.id}/reconciliation`, { token: rosa }); ok('GET /groups/:id/reconciliation', r.status === 200 && 'checked' in r.json, r.status);
+r = await call('POST', `/groups/${familia.id}/reconciliation`, { token: mari, body: {} }); ok('POST reconciliation by non-organizer -> 403', r.status === 403, r.status);
+r = await call('POST', `/groups/${familia.id}/autopay`, { token: wara, body: { enabled: true } }); ok('autopay needs a saved method -> 409', r.status === 409, r.status);
+r = await call('POST', `/contributions/${pend.id}/claim`, { token: rosa, body: { kind: 'OTHER', message: 'x' } }); ok('claim on another member contribution -> 404', r.status === 404, r.status);
+r = await call('POST', `/contributions/${pend.id}/claim`, { token: wara, body: { kind: 'DOUBLE_CHARGE', message: 'Me cobraron dos veces' } }); ok('POST /contributions/:id/claim', r.status === 201, r.status + JSON.stringify(r.json).slice(0, 100));
+r = await call('GET', `/groups/${familia.id}/claims`, { token: wara }); ok('GET /groups/:id/claims (member sees own)', r.status === 200 && r.json.claims.length === 1, r.status);
+r = await call('GET', `/groups/${familia.id}/claims`, { token: rosa }); ok('GET claims (organizer sees it)', r.status === 200 && r.json.claims.some(c => c.claimant), r.status);
+r = await call('POST', `/claims/none/refund`, { token: rosa, body: {} }); ok('POST /claims/:id/refund unknown -> 404', r.status === 404, r.status);
+{
+  const key = (await call('POST', '/me/mcp-token', { token: rosa, body: {} })).json?.token;
+  ok('POST /me/mcp-token issues a read-only key', !!key);
+  r = await call('GET', '/groups', { token: key }); ok('read-only key can read /groups', r.status === 200, r.status);
+  r = await call('GET', `/groups/${familia.id}/chat`, { token: key }); ok('read-only key cannot read the private chat -> 403', r.status === 403, r.status);
+  r = await call('POST', '/groups', { token: key, body: {} }); ok('read-only key cannot write -> 403', r.status === 403, r.status);
+  r = await call('POST', '/me/mcp-token', { token: key, body: {} }); ok('read-only key cannot create keys -> 403', r.status === 403, r.status);
+  r = await call('DELETE', '/me/mcp-token', { token: rosa }); ok('DELETE /me/mcp-token revokes', r.status === 200, r.status);
+  r = await call('GET', '/groups', { token: key }); ok('revoked key -> 401', r.status === 401, r.status);
+  r = await call('GET', '/groups', { token: rosa }); ok('app session still works after revoking', r.status === 200, r.status);
+}
+r = await call('GET', '/me', { token: rosa }); ok('/me never exposes PayPal ids or tokens', r.status === 200 && !('paypalUserId' in r.json) && !('paypalVaultId' in r.json) && !('pushToken' in r.json) && r.json.hasSavedMethod === false, JSON.stringify(Object.keys(r.json)));
+
 // --- payouts retry unknown, simulated PayPal panel
 r = await call('POST', '/payouts/none/retry', { token: rosa }); ok('POST /payouts/:id/retry unknown -> 4xx', r.status >= 400 && r.status < 500, r.status);
 r = await call('GET', '/__paypal/', { raw: true }); ok('GET /__paypal/ simulated PayPal panel', r.status === 200, r.status);
