@@ -122,7 +122,7 @@ function Sidebar() {
     let alive = true;
     const load = (retry: boolean) =>
       api<GroupRow[]>("/groups")
-        .then((g) => alive && setGroups(g.filter((x) => x.status !== "FINISHED")))
+        .then((g) => alive && setGroups(g.filter((x) => x.status !== "FINISHED" && x.status !== "CANCELLED")))
         .catch(() => {
           if (retry && alive) setTimeout(() => load(false), 2000);
         });

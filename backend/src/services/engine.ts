@@ -11,6 +11,7 @@ import { db } from "../db";
 import { reminderStage, STAGE_ORDER, lateFeeCents, formatUSD } from "../domain/rules";
 import { writeReminder } from "../ai/agent";
 import { coverWithRetention, retryUnknownPayouts, sendOverdueInvoice } from "./payments";
+import { retryPendingRefunds } from "./refunds";
 import { execute } from "./actions";
 import { notify, postToGroupChat } from "./notify";
 import { windows } from "./windows";
@@ -170,6 +171,7 @@ export function startEngine(intervalMs: number) {
         else await runExpired(g.id);
       }
       await retryUnknownPayouts();
+      await retryPendingRefunds();
     } catch (e) {
       console.error("engine tick failed", e);
     } finally {

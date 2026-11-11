@@ -34,6 +34,6 @@ export function payoutOutcome(eventType: string): "SUCCEEDED" | "FAILED" | "WAIT
 /** The capture a refund / reversal event is about. PayPal puts it in the "up" link of the refund. */
 export function captureIdOfRefund(resource: any): string | null {
   const up = (resource?.links ?? []).find((l: any) => l?.rel === "up" && typeof l.href === "string");
-  const fromLink = up ? /\/captures\/([A-Za-z0-9]+)/.exec(up.href)?.[1] : undefined;
+  const fromLink = up ? /\/captures\/([^/?#]+)/.exec(up.href)?.[1] : undefined;
   return fromLink ?? resource?.capture_id ?? null;
 }

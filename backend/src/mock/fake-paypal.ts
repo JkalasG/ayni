@@ -23,6 +23,7 @@ const authorizations = new Map<string, { amount: string; status: string; capture
 const batches = new Map<string, { batchId: string; email: string; amount: string; note: string; createdAt: Date }>();
 const invoices = new Map<string, { total: string; email: string; status: string }>();
 const captures: { id: string; amount: string; description: string; createdAt: Date }[] = [];
+const refunds = new Map<string, { id: string; captureId: string; amount: string }>(); // by PayPal-Request-Id
 let seq = 0;
 // The mock database survives restarts but this counter does not: a per-run prefix keeps ids unique
 // (paypalInvoiceId, order and capture ids are unique columns).
@@ -161,6 +162,19 @@ export function fakePayPal(webBase: string): Router {
     res.status(204).end();
   });
 
+  // ---------------- Payments v2 (refunds): same request id = same refund; a capture is refunded once
+  r.post("/v2/payments/captures/:id/refund", (req, res) => {
+    const requestId = String(req.headers["paypal-request-id"] ?? "");
+    const same = refunds.get(requestId);
+    if (same) return res.status(201).json({ id: same.id, status: "COMPLETED" });
+    const capture = captures.find((c) => c.id === req.params.id);
+    if (!capture) return res.status(404).json({ name: "RESOURCE_NOT_FOUND" });
+    if ([...refunds.values()].some((x) => x.captureId === capture.id)) return res.status(422).json({ name: "UNPROCESSABLE_ENTITY", details: [{ issue: "CAPTURE_FULLY_REFUNDED" }] });
+    const refund = { id: sim("REFUND"), captureId: capture.id, amount: capture.amount };
+    refunds.set(requestId || refund.id, refund);
+    res.status(201).json({ id: refund.id, status: "COMPLETED" });
+  });
+
   // ---------------- Payouts v1 (same sender_batch_id is never paid twice)
   r.post("/v1/payments/payouts", (req, res) => {
     const sender = req.body.sender_batch_header?.sender_batch_id;
@@ -213,6 +227,7 @@ export function fakePayPal(webBase: string): Router {
       page(
         "Panel PayPal simulado",
         `<div class="card"><h1>Cobros</h1><table>${rows(captures.map((c) => [c.id, `$${c.amount}`, c.description]))}</table></div>
+<div class="card"><h1>Reembolsos</h1><table>${rows([...refunds.values()].map((x) => [x.id, `$${x.amount}`, x.captureId]))}</table></div>
 <div class="card"><h1>Envíos (Payouts)</h1><table>${rows([...batches.values()].map((b) => [b.batchId, `$${b.amount}`, b.email]))}</table></div>
 <div class="card"><h1>Facturas</h1><table>${rows([...invoices.entries()].map(([id, i]) => [id, `$${i.total}`, i.status]))}</table></div>
 <div class="card"><h1>Depósitos autorizados</h1><table>${rows([...authorizations.entries()].map(([id, a]) => [id, `$${a.amount}`, a.status]))}</table></div>`

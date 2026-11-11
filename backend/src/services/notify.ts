@@ -17,7 +17,8 @@ export type ChatEvent =
   | { type: "ready"; round: number }
   | { type: "joined"; name: string; newcomer: boolean }
   | { type: "dispute"; round: number }
-  | { type: "finished" };
+  | { type: "finished" }
+  | { type: "cancelled" };
 
 export async function postToGroupChat(groupId: string, content: string, event?: ChatEvent) {
   await db.chatMessage.create({ data: { groupId, role: "system", content, ...(event ? { kind: "event", event } : {}) } });

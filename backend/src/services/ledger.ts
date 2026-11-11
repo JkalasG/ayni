@@ -8,7 +8,7 @@ import { buildLedger, type LedgerEntry, type LedgerViewer } from "../domain/ledg
 import { HttpError } from "./errors";
 
 async function ledgerRows(groupId: string) {
-  const [contributions, payouts] = await Promise.all([
+  const [contributions, payouts, refunds, members, rounds] = await Promise.all([
     db.contribution.findMany({
       where: { round: { groupId }, status: { not: "PENDING" } },
       include: { round: { select: { number: true, dueAt: true } }, membership: { include: { user: { select: { name: true } } } } },
@@ -17,8 +17,36 @@ async function ledgerRows(groupId: string) {
       where: { membership: { groupId } },
       include: { round: { select: { number: true } }, membership: { include: { user: { select: { name: true } } } } },
     }),
+    db.refund.findMany({ where: { groupId } }),
+    db.membership.findMany({ where: { groupId }, include: { user: { select: { name: true } } } }),
+    db.round.count({ where: { groupId } }),
   ]);
+  const nameOf = (membershipId: string | null) => members.find((m) => m.id === membershipId)?.user.name ?? "";
+  const refundRounds = await db.contribution.findMany({
+    where: { id: { in: refunds.map((r) => r.contributionId).filter((x): x is string => !!x) } },
+    select: { id: true, round: { select: { number: true } } },
+  });
   return {
+    extra: {
+      // Once the group starts, the deposit is the round-1 contribution and shows up there.
+      deposits:
+        rounds === 0
+          ? members
+              .filter((m) => m.depositCaptureId)
+              .map((m) => ({ membershipId: m.id, memberName: m.user.name, amountCents: 0, at: m.joinedAt, paypalCaptureId: m.depositCaptureId! }))
+          : [],
+      refunds: refunds.map((r) => ({
+        id: r.id,
+        membershipId: r.membershipId,
+        memberName: nameOf(r.membershipId),
+        round: refundRounds.find((c) => c.id === r.contributionId)?.round.number ?? null,
+        amountCents: r.amountCents,
+        status: r.status,
+        createdAt: r.createdAt,
+        paypalRefundId: r.paypalRefundId,
+        reopened: r.reopened,
+      })),
+    },
     contributions: contributions.map((c) => ({
       id: c.id,
       membershipId: c.membershipId,
@@ -57,7 +85,8 @@ export async function groupLedger(user: User, groupId: string) {
   const isOrganizer = group.organizerId === user.id;
   const viewer: LedgerViewer = { membershipId: me.id, isOrganizer };
   const rows = await ledgerRows(groupId);
-  const ledger = buildLedger(viewer, rows.contributions, rows.payouts);
+  for (const d of rows.extra.deposits) d.amountCents = group.contributionCents;
+  const ledger = buildLedger(viewer, rows.contributions, rows.payouts, rows.extra);
   return {
     group: { id: group.id, name: group.name, currency: group.currency },
     isOrganizer,
@@ -71,14 +100,15 @@ export async function groupLedger(user: User, groupId: string) {
 export async function myLedger(user: User) {
   const memberships = await db.membership.findMany({
     where: { userId: user.id },
-    include: { group: { select: { id: true, name: true } } },
+    include: { group: { select: { id: true, name: true, contributionCents: true } } },
     orderBy: { joinedAt: "desc" },
   });
   const entries: (LedgerEntry & { groupId: string; groupName: string })[] = [];
   for (const m of memberships) {
     const rows = await ledgerRows(m.groupId);
     // Not as organizer: this screen is about the person, not the groups they run.
-    const mine = buildLedger({ membershipId: m.id, isOrganizer: false }, rows.contributions, rows.payouts).entries.filter((e) => e.mine);
+    for (const d of rows.extra.deposits) d.amountCents = m.group.contributionCents;
+    const mine = buildLedger({ membershipId: m.id, isOrganizer: false }, rows.contributions, rows.payouts, rows.extra).entries.filter((e) => e.mine);
     for (const e of mine) entries.push({ ...e, groupId: m.group.id, groupName: m.group.name });
   }
   entries.sort((a, b) => (a.at < b.at ? 1 : -1));

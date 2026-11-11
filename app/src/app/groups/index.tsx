@@ -18,7 +18,7 @@ import { fonts, space, type Palette } from "@/lib/theme";
 type GroupRow = {
   id: string;
   name: string;
-  status: "FORMING" | "ORDERING" | "ACTIVE" | "FINISHED";
+  status: "FORMING" | "ORDERING" | "ACTIVE" | "FINISHED" | "CANCELLED";
   contributionCents: number;
   frequency: string;
   maxMembers: number;
@@ -29,7 +29,9 @@ type GroupRow = {
 /** What the tile needs from the group detail: my turn, my next date, whether I owe. */
 type Mine = { turn: number | null; nextDue: string | null; mustPay: boolean; myRound: boolean };
 
-const statusColor = (c: Palette, s: GroupRow["status"]) => ({ FORMING: c.naranja.text, ORDERING: c.turquesa.text, ACTIVE: c.verde.text, FINISHED: c.muted })[s];
+const statusColor = (c: Palette, s: GroupRow["status"]) => ({ FORMING: c.naranja.text, ORDERING: c.turquesa.text, ACTIVE: c.verde.text, FINISHED: c.muted, CANCELLED: c.rojo.text })[s];
+/** Finished or cancelled: nothing left to do in it. */
+const closed = (s: GroupRow["status"]) => s === "FINISHED" || s === "CANCELLED";
 const MOTIFS: Motif[] = ["zigzag", "escalonado", "franjas"];
 
 function hash(s: string) {
@@ -61,7 +63,7 @@ export default function Groups() {
   // details for the tiles, one group at a time (read only, same endpoint as the group screen)
   useEffect(() => {
     for (const g of groups ?? []) {
-      if (g.status === "FINISHED") continue;
+      if (closed(g.status)) continue;
       api<any>(`/groups/${g.id}`)
         .then((d) => {
           const meM = d.memberships.find((m: any) => m.id === d.myMembershipId);
@@ -79,8 +81,8 @@ export default function Groups() {
 
   if (!me) return <Redirect href="/" />;
 
-  const active = (groups ?? []).filter((g) => g.status !== "FINISHED");
-  const finished = (groups ?? []).filter((g) => g.status === "FINISHED");
+  const active = (groups ?? []).filter((g) => !closed(g.status));
+  const finished = (groups ?? []).filter((g) => closed(g.status));
   const firstName = me.name.replace(/^(Doña|Don)\s+/i, "").split(" ")[0];
   const locale = lang === "en" ? "en-US" : "es-BO";
   const day = (d: string) => new Date(d).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" });

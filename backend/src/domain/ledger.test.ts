@@ -104,6 +104,26 @@ test("failed and retried payouts never count as money sent", () => {
   assert.equal(totals.feesCents, null);
 });
 
+test("deposits and refunds are personal, and a reopened contribution's refund is not counted twice", () => {
+  const extra = {
+    deposits: [{ membershipId: "ana", memberName: "ana", amountCents: 3000, at: at(1), paypalCaptureId: "CAP-DEP" }],
+    refunds: [
+      { id: "r1", membershipId: "ana", memberName: "ana", round: null, amountCents: 3000, status: "COMPLETED" as const, createdAt: at(2), paypalRefundId: "REF-1", reopened: false },
+      { id: "r2", membershipId: "beto", memberName: "beto", round: 1, amountCents: 2000, status: "COMPLETED" as const, createdAt: at(3), paypalRefundId: "REF-2", reopened: true },
+      { id: "r3", membershipId: "beto", memberName: "beto", round: 1, amountCents: 500, status: "FAILED" as const, createdAt: at(3), paypalRefundId: null, reopened: false },
+    ],
+  };
+  const organizer = buildLedger({ membershipId: "rosa", isOrganizer: true }, [], [], extra);
+  assert.deepEqual(organizer.entries.map((e) => e.id).sort(), ["d_ana", "r_r1", "r_r2", "r_r3"]);
+  assert.equal(organizer.totals.inCents, 3000);
+  assert.equal(organizer.totals.outCents, 3000, "only the refund whose charge is still in the ledger; failed ones never");
+  assert.equal(byId(organizer.entries, "r_r2")!.direction, "none");
+  const ana = buildLedger({ membershipId: "ana", isOrganizer: false }, [], [], extra);
+  assert.deepEqual(ana.entries.map((e) => e.id).sort(), ["d_ana", "r_r1"]);
+  const carla = buildLedger({ membershipId: "carla", isOrganizer: false }, [], [], extra);
+  assert.equal(carla.entries.length, 0);
+});
+
 test("newest first", () => {
   const { entries } = buildLedger({ membershipId: null, isOrganizer: true }, contributions, payouts);
   const times = entries.map((e) => e.at);

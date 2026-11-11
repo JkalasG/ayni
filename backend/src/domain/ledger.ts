@@ -39,8 +39,26 @@ export type LedgerPayout = {
   retried: boolean;
 };
 
+/** An admission deposit charged for a group that has no rounds yet (later it becomes the round-1 contribution). */
+export type LedgerDeposit = { membershipId: string; memberName: string; amountCents: number; at: Date; paypalCaptureId: string };
+
+export type LedgerRefund = {
+  id: string;
+  membershipId: string | null;
+  memberName: string;
+  round: number | null;
+  amountCents: number;
+  status: "PENDING" | "COMPLETED" | "FAILED";
+  createdAt: Date;
+  paypalRefundId: string | null;
+  /** The contribution went back to pending, so its charge is no longer in this ledger. */
+  reopened: boolean;
+};
+
 export type LedgerEntryType =
   | "CONTRIBUTION" // paid with PayPal
+  | "DEPOSIT" // admission deposit, group not started
+  | "REFUND" // PayPal sent money back to the member
   | "GUARANTEE_COVER" // overdue, paid from the member's own guarantee
   | "UNPAID" // closed without payment
   | "POT"
@@ -78,7 +96,8 @@ export type LedgerTotals = {
 export function buildLedger(
   viewer: LedgerViewer,
   contributions: LedgerContribution[],
-  payouts: LedgerPayout[]
+  payouts: LedgerPayout[],
+  extra: { deposits?: LedgerDeposit[]; refunds?: LedgerRefund[] } = {}
 ): { entries: LedgerEntry[]; totals: LedgerTotals } {
   const full = (membershipId: string) => viewer.isOrganizer || membershipId === viewer.membershipId;
   const entries: LedgerEntry[] = [];
@@ -143,6 +162,45 @@ export function buildLedger(
       round: p.round,
       ref: full(p.membershipId) ? p.paypalBatchId : null,
       mine: p.membershipId === viewer.membershipId,
+    });
+  }
+
+  // Deposits and refunds are personal: the organizer and the person only.
+  for (const d of extra.deposits ?? []) {
+    if (!full(d.membershipId)) continue;
+    entries.push({
+      id: `d_${d.membershipId}`,
+      at: d.at.toISOString(),
+      type: "DEPOSIT",
+      direction: "in",
+      status: "DONE",
+      amountCents: d.amountCents,
+      lateFeeCents: 0,
+      feeCents: null,
+      membershipId: d.membershipId,
+      memberName: d.memberName,
+      round: null,
+      ref: d.paypalCaptureId,
+      mine: d.membershipId === viewer.membershipId,
+    });
+  }
+  for (const r of extra.refunds ?? []) {
+    if (!r.membershipId || !full(r.membershipId)) continue;
+    entries.push({
+      id: `r_${r.id}`,
+      at: r.createdAt.toISOString(),
+      type: "REFUND",
+      // If the contribution was reopened its charge left the ledger too: counting the refund would subtract it twice.
+      direction: r.reopened ? "none" : "out",
+      status: r.status === "COMPLETED" ? "DONE" : r.status === "FAILED" ? "FAILED" : "IN_PROGRESS",
+      amountCents: r.amountCents,
+      lateFeeCents: 0,
+      feeCents: null,
+      membershipId: r.membershipId,
+      memberName: r.memberName,
+      round: r.round,
+      ref: r.paypalRefundId,
+      mine: r.membershipId === viewer.membershipId,
     });
   }
 

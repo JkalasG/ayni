@@ -176,6 +176,31 @@ export async function voidAuthorization(authorizationId: string): Promise<void> 
   });
 }
 
+// ---------- Payments v2: refunds ----------
+
+/** Refund a capture in full. `requestId` makes it idempotent: the same id never refunds twice. */
+export async function refundCapture(p: { captureId: string; requestId: string; note: string }): Promise<{ id: string; status: string }> {
+  const res = await call<any>("refundCapture", `/v2/payments/captures/${encodeURIComponent(p.captureId)}/refund`, {
+    method: "POST",
+    idempotencyKey: p.requestId,
+    body: JSON.stringify({ note_to_payer: p.note.slice(0, 255) }),
+  });
+  // PENDING = PayPal accepted it and will finish it (e.g. an eCheck); the webhook confirms.
+  if (res.status !== "COMPLETED" && res.status !== "PENDING") throw new PayPalError("refundCapture", 422, JSON.stringify(res).slice(0, 500));
+  return { id: res.id, status: res.status };
+}
+
+/**
+ * Classify a refund error:
+ *  - "already": the capture is already fully refunded, so the money IS back
+ *  - "failed": PayPal answered with a definitive error
+ *  - "unknown": timeout / network / 5xx, so it may or may not have been refunded
+ */
+export function refundErrorKind(e: unknown): "already" | "failed" | "unknown" {
+  if (e instanceof PayPalError && e.status < 500) return /CAPTURE_FULLY_REFUNDED/i.test(e.body) ? "already" : "failed";
+  return "unknown";
+}
+
 // ---------- Invoicing v2: formal invoice for overdue contributions ----------
 
 export async function createAndSendInvoice(p: {

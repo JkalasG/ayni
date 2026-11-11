@@ -25,6 +25,7 @@ test("the capture of a refund comes from its 'up' link", () => {
     ],
   };
   assert.equal(captureIdOfRefund(resource), "8AB12345CD678901E");
+  assert.equal(captureIdOfRefund({ id: "R", links: [{ rel: "up", href: "http://localhost/v2/payments/captures/SIM-CAPTURE-AB0001?x=1" }] }), "SIM-CAPTURE-AB0001");
   assert.equal(captureIdOfRefund({ id: "R", capture_id: "CAP9" }), "CAP9");
   assert.equal(captureIdOfRefund({ id: "R", links: [{ rel: "up" }] }), null);
   assert.equal(captureIdOfRefund(undefined), null);

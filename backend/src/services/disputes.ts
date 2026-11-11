@@ -55,6 +55,36 @@ export async function groupDisputes(groupId: string): Promise<GroupDispute[]> {
   return out;
 }
 
+const OUTCOME: Record<string, string> = {
+  RESOLVED_BUYER_FAVOUR: "a favor de quien pagó: PayPal le devuelve el dinero",
+  RESOLVED_SELLER_FAVOUR: "a favor del grupo: el aporte se mantiene",
+  RESOLVED_WITH_PAYOUT: "PayPal cubrió el monto: el aporte se mantiene",
+  CANCELED_BY_BUYER: "la persona la retiró: el aporte se mantiene",
+  ACCEPTED: "se aceptó el reclamo: PayPal devuelve el dinero",
+  DENIED: "PayPal rechazó el reclamo: el aporte se mantiene",
+};
+
+/** Webhook CUSTOMER.DISPUTE.UPDATED / RESOLVED: keep the organizer informed without making them open PayPal. */
+export async function onDisputeChanged(resource: any, resolved: boolean) {
+  const ids: string[] = (resource?.disputed_transactions ?? []).map((t: any) => t.seller_transaction_id).filter(Boolean);
+  if (ids.length === 0) return;
+  // An update is only worth a notification when PayPal is waiting for us.
+  if (!resolved && resource?.status !== "WAITING_FOR_SELLER_RESPONSE") return;
+  const c = await db.contribution.findFirst({
+    where: { paypalCaptureId: { in: ids } },
+    include: { round: { include: { group: true } }, membership: { include: { user: true } } },
+  });
+  if (!c) return;
+  const g = c.round.group;
+  const what = `la disputa de ${c.membership.user.name} (ronda ${c.round.number})`;
+  if (resolved) {
+    const outcome = OUTCOME[String(resource?.dispute_outcome?.outcome_code ?? "")] ?? "PayPal la cerró";
+    await notify(g.organizerId, g.id, "mediation", `Disputa resuelta · ${g.name}`, `PayPal resolvió ${what}: ${outcome}.`);
+  } else {
+    await notify(g.organizerId, g.id, "mediation", `PayPal espera tu respuesta · ${g.name}`, `PayPal necesita una respuesta sobre ${what}. Revisa "Disputas" en el grupo.`);
+  }
+}
+
 /** Webhook CUSTOMER.DISPUTE.CREATED: tell the organizer of the affected group right away. */
 export async function onDisputeCreated(resource: any) {
   const ids: string[] = (resource?.disputed_transactions ?? []).map((t: any) => t.seller_transaction_id).filter(Boolean);

@@ -246,7 +246,7 @@ export async function acceptRequest(requestId: string) {
   });
 }
 
-export async function rejectRequest(requestId: string, why: "organizer" | "rules" | "timeout" | "full") {
+export async function rejectRequest(requestId: string, why: "organizer" | "rules" | "timeout" | "full" | "cancelled") {
   const r = await db.joinRequest.findUniqueOrThrow({ where: { id: requestId }, include: { group: true } });
   const claim = await db.joinRequest.updateMany({
     where: { id: r.id, status: { in: [...ACTIVE_REQUEST] } },
@@ -259,6 +259,7 @@ export async function rejectRequest(requestId: string, why: "organizer" | "rules
     rules: "Tu perfil aún no cumple los requisitos de este grupo.",
     timeout: "El organizador no respondió a tiempo.",
     full: "El grupo ya se llenó o ya empezó.",
+    cancelled: "El organizador canceló el pasanaku.",
   }[why];
   await notify(r.userId, r.groupId, "action", `Solicitud a ${r.group.name}`, `${reason} No se te cobró nada.`);
 }

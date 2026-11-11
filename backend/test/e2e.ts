@@ -24,6 +24,9 @@ const voids: string[] = [];
 const invoices: { id: string; total: number; cancelled: boolean }[] = [];
 const auths = new Map<string, number>();
 const seenBatches = new Set<string>();
+const refunds: { id: string; capture: string; requestId: string }[] = [];
+let loseNextRefundResponse = false; // PayPal refunds, but our request times out (503)
+let failNextRefund = false; // PayPal answers with a definitive error
 const FEE_CENTS = 107; // what the fake PayPal reports as its fee on every capture
 let loseNextPayoutResponse = false; // PayPal gets the payout but our request times out (503)
 
@@ -69,6 +72,25 @@ const server = http.createServer((req, res) => {
     if ((m = u.match(/^\/v2\/payments\/authorizations\/([^/]+)\/void$/))) {
       voids.push(m[1]);
       return send(204);
+    }
+    if ((m = u.match(/^\/v2\/payments\/captures\/([^/]+)\/refund$/))) {
+      const requestId = String(req.headers["paypal-request-id"] ?? "");
+      assert.ok(requestId, "refunds always carry an idempotency key");
+      // Like PayPal: the same request id returns the same refund, and a capture is refunded once.
+      const same = refunds.find((r) => r.requestId === requestId);
+      if (same) return send(201, { id: same.id, status: "COMPLETED" });
+      if (failNextRefund) {
+        failNextRefund = false;
+        return send(422, { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "REFUND_FAILED_INSUFFICIENT_FUNDS" }] });
+      }
+      if (refunds.some((r) => r.capture === m![1])) return send(422, { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "CAPTURE_FULLY_REFUNDED" }] });
+      const rid = id("REF");
+      refunds.push({ id: rid, capture: m[1], requestId });
+      if (loseNextRefundResponse) {
+        loseNextRefundResponse = false;
+        return send(503, { name: "SERVICE_UNAVAILABLE" });
+      }
+      return send(201, { id: rid, status: "COMPLETED" });
     }
     if (u === "/v1/payments/payouts") {
       const item = j.items[0];
@@ -142,6 +164,7 @@ async function main() {
   const ledger = await import(`${B}/src/services/ledger`);
   const chatSvc = await import(`${B}/src/services/chat`);
   const webhooks = await import(`${B}/src/services/webhooks`);
+  const refundSvc = await import(`${B}/src/services/refunds`);
 
   // ------------------------------------------------ security: redirect allow-list
   assert.equal(auth.isAllowedRedirect("http://localhost:8081/groups/x"), true);
@@ -397,6 +420,129 @@ async function main() {
   const r1c = await db.contribution.findMany({ where: { round: { groupId: open.id, number: 1 }, status: "PAID" } });
   assert.equal(r1c.length, 2, "Tomás and Kusi deposits are their round-1 contributions");
   console.log("✔ open group order:", om.map((m: any) => `${m.turn}.${m.user.name} ${m.retentionPct}%`).join(", "));
+
+  // ------------------------------------------------ PayPal refunds / reversals on a running group
+  const refundEvent = (type: string, refundId: string, captureId: string, value: string) => ({
+    event_type: `PAYMENT.CAPTURE.${type}`,
+    resource: { id: refundId, amount: { value, currency_code: "USD" }, links: [{ rel: "up", href: `https://api.sandbox.paypal.com/v2/payments/captures/${captureId}` }] },
+  });
+  const roundOne = async (u: any) => db.contribution.findFirstOrThrow({ where: { membership: { userId: u.id, groupId: open.id }, round: { number: 1 } }, include: { round: true } });
+  const tomasR1 = await roundOne(tomas);
+  assert.equal(tomasR1.status, "PAID");
+  const whole = (tomasR1.amountCents / 100).toFixed(2);
+  // The pot has not left: a full refund simply makes the contribution pending again.
+  await webhooks.handleWebhook(refundEvent("REFUNDED", "PP-REFUND-1", tomasR1.paypalCaptureId, whole));
+  await webhooks.handleWebhook(refundEvent("REFUNDED", "PP-REFUND-1", tomasR1.paypalCaptureId, whole)); // repeated delivery
+  const reopened = await roundOne(tomas);
+  assert.equal(reopened.status, "PENDING");
+  assert.equal(reopened.paypalCaptureId, null);
+  assert.equal(await db.refund.count({ where: { paypalRefundId: "PP-REFUND-1" } }), 1);
+  assert.equal(await db.notification.count({ where: { userId: marisol.id, title: "PayPal devolvió un aporte" } }), 1, "the organizer is told once");
+  // In the books the charge is gone, so the refund must not be subtracted again.
+  const openLedger = await ledger.groupLedger(marisol, open.id);
+  const refundRow = openLedger.entries.find((e: any) => e.type === "REFUND");
+  assert.equal(refundRow.direction, "none");
+  assert.equal(openLedger.totals.outCents, 0);
+  // A partial reversal (a dispute partly lost): the contribution stays paid, the organizer is told.
+  const kusiR1 = await roundOne(kusi);
+  await webhooks.handleWebhook(refundEvent("REVERSED", "PP-REVERSAL-1", kusiR1.paypalCaptureId, "5.00"));
+  assert.equal((await roundOne(kusi)).status, "PAID");
+  assert.equal((await db.refund.findUniqueOrThrow({ where: { paypalRefundId: "PP-REVERSAL-1" } })).reason, "PAYPAL_REVERSAL");
+  // A refund of some other shop's capture is not ours.
+  await webhooks.handleWebhook(refundEvent("REFUNDED", "PP-REFUND-X", "OTHER-SHOP-CAPTURE", "9.00"));
+  assert.equal(await db.refund.count({ where: { paypalRefundId: "PP-REFUND-X" } }), 0);
+  // Tomás pays again; PayPal denies a payment under review: nothing is recorded as paid, he is told.
+  const again = await payments.startCheckout(tomas, reopened.id, `http://localhost:8081/groups/${open.id}`);
+  await webhooks.handleWebhook({ event_type: "PAYMENT.CAPTURE.DENIED", resource: { id: "CAP-DENIED", supplementary_data: { related_ids: { order_id: again.orderId } } } });
+  assert.equal((await roundOne(tomas)).status, "PENDING");
+  assert.equal(await db.notification.count({ where: { userId: tomas.id, body: { contains: "no aprobó tu pago" } } }), 1);
+  // A dispute is resolved: the organizer learns the outcome without opening PayPal.
+  await webhooks.handleWebhook({
+    event_type: "CUSTOMER.DISPUTE.RESOLVED",
+    resource: { dispute_id: "PP-D-9", status: "RESOLVED", dispute_outcome: { outcome_code: "RESOLVED_SELLER_FAVOUR" }, disputed_transactions: [{ seller_transaction_id: kusiR1.paypalCaptureId }] },
+  });
+  const resolved = await db.notification.findFirstOrThrow({ where: { userId: marisol.id, title: { startsWith: "Disputa resuelta" } } });
+  assert.ok(resolved.body.includes("a favor del grupo"));
+  console.log("✔ PayPal refunds and reversals: contribution reopened or flagged, denied payment, dispute outcome");
+
+  // ------------------------------------------------ cancel a pasanaku before it starts: deposits go back
+  const cancelable = await groups.createGroup(wara, {
+    name: "Pasanaku que se cancela", contributionCents: 3000, frequency: "WEEKLY", orderMethod: "LOTTERY", maxMembers: 6, lateFeePct: 5, maxRetentionPct: 25, demoMode: false,
+    isOpen: true, admissionMode: "MANUAL", minCompleted: 0, minOnTimePct: 0, maxLate: null, acceptNewcomers: true, requireDeposit: true,
+  });
+  const apply = async (u: any) => {
+    const { request } = await admission.requestToJoin(u, cancelable.id, { redirect });
+    await admission.completeDeposit((await db.joinRequest.findUniqueOrThrow({ where: { id: request.id } })).paypalOrderId);
+    return request.id;
+  };
+  const admitTo = async (requestId: string) => {
+    const acts = await db.pendingAction.findMany({ where: { groupId: cancelable.id, type: "ADMIT_MEMBER", status: "PENDING" } });
+    await actions.resolveAction(wara, acts.find((a: any) => a.payload.requestId === requestId).id, true);
+  };
+  for (const u of [marisol, juan, efrain]) await admitTo(await apply(u)); // accepted: deposits charged
+  const rosaReq = await apply(rosa); // still waiting: only a hold
+  const kusiReq = await apply(kusi);
+  // PayPal released Kusi's hold on its own (it expired): nothing to void later, both are told.
+  const kusiAuth = (await db.joinRequest.findUniqueOrThrow({ where: { id: kusiReq } })).authorizationId;
+  await webhooks.handleWebhook({ event_type: "PAYMENT.AUTHORIZATION.VOIDED", resource: { id: kusiAuth } });
+  const kusiAfter = await db.joinRequest.findUniqueOrThrow({ where: { id: kusiReq } });
+  assert.equal(kusiAfter.authorizationId, null);
+  assert.equal(kusiAfter.status, "PENDING", "the organizer can still decide");
+
+  const depositIn = async () => (await ledger.groupLedger(wara, cancelable.id)).totals.inCents;
+  assert.equal(await depositIn(), 9000, "three deposits charged");
+  await assert.rejects(refundSvc.cancelGroup(marisol, cancelable.id), /organizer_only/);
+  const voidsBeforeCancel = voids.length;
+  const refundsBefore = refunds.length;
+  loseNextRefundResponse = true; // first refund: PayPal does it but we never hear back
+  failNextRefund = false;
+  const cancelled = await refundSvc.cancelGroup(wara, cancelable.id);
+  assert.equal(cancelled.refunds, 3);
+  await assert.rejects(refundSvc.cancelGroup(wara, cancelable.id), /already_cancelled/);
+  assert.equal((await db.group.findUniqueOrThrow({ where: { id: cancelable.id } })).status, "CANCELLED");
+  assert.equal(voids.length, voidsBeforeCancel + 1, "Rosa's hold released; Kusi's was already gone");
+  assert.equal((await db.joinRequest.findUniqueOrThrow({ where: { id: rosaReq } })).status, "REJECTED");
+  assert.equal(await db.pendingAction.count({ where: { groupId: cancelable.id, status: "PENDING" } }), 0);
+  assert.equal(refunds.length, refundsBefore + 3);
+  // One refund has an unknown outcome: it stays pending and is retried with the SAME key -> still refunded once.
+  const pendingRefund = await db.refund.findFirstOrThrow({ where: { groupId: cancelable.id, status: "PENDING" } });
+  await db.refund.update({ where: { id: pendingRefund.id }, data: { createdAt: new Date(Date.now() - 120_000) } });
+  await refundSvc.retryPendingRefunds();
+  assert.equal((await db.refund.findUniqueOrThrow({ where: { id: pendingRefund.id } })).status, "COMPLETED");
+  assert.equal(refunds.length, refundsBefore + 3, "the retried refund was not sent twice");
+  // Money conservation for the cancelled group: every deposit charged went back.
+  const cancelledLedger = await ledger.groupLedger(wara, cancelable.id);
+  assert.equal(cancelledLedger.totals.inCents, 9000);
+  assert.equal(cancelledLedger.totals.outCents, 9000);
+  const marisolLedger = await ledger.groupLedger(marisol, cancelable.id);
+  assert.deepEqual(marisolLedger.entries.map((e: any) => e.type).sort(), ["DEPOSIT", "REFUND"], "a member only sees their own deposit and refund");
+  // Nothing can happen in a cancelled group.
+  await assert.rejects(groups.startGroup(wara, cancelable.id), /set_order_first/);
+  await assert.rejects(groups.joinGroup(tomas, cancelable.inviteCode), /group_already_started/);
+  await assert.rejects(admission.requestToJoin(tomas, cancelable.id, { redirect }), /not_found/);
+  // Our own refund also arrives as a webhook: it confirms the record, it does not create another.
+  const done = await db.refund.findFirstOrThrow({ where: { groupId: cancelable.id, status: "COMPLETED", paypalRefundId: { not: null } } });
+  await webhooks.handleWebhook(refundEvent("REFUNDED", done.paypalRefundId, done.captureId, "30.00"));
+  assert.equal(await db.refund.count({ where: { groupId: cancelable.id } }), 3);
+
+  // PayPal rejects a refund: FAILED, the organizer is told and retries it once.
+  const second = await groups.createGroup(wara, {
+    name: "Otro que se cancela", contributionCents: 1500, frequency: "WEEKLY", orderMethod: "LOTTERY", maxMembers: 4, lateFeePct: 5, maxRetentionPct: 25, demoMode: false,
+    isOpen: true, admissionMode: "AUTO", minCompleted: 0, minOnTimePct: 0, maxLate: null, acceptNewcomers: true, requireDeposit: true,
+  });
+  const { request: mReq } = await admission.requestToJoin(marisol, second.id, { redirect });
+  await admission.completeDeposit((await db.joinRequest.findUniqueOrThrow({ where: { id: mReq.id } })).paypalOrderId); // AUTO: accepted, deposit charged
+  failNextRefund = true;
+  await refundSvc.cancelGroup(wara, second.id);
+  const failedRefund = await db.refund.findFirstOrThrow({ where: { groupId: second.id } });
+  assert.equal(failedRefund.status, "FAILED");
+  assert.equal((await groups.groupDetail(wara, second.id)).failedRefunds.length, 1);
+  assert.equal((await groups.groupDetail(marisol, second.id)).failedRefunds.length, 0, "only the organizer sees failed refunds");
+  await assert.rejects(refundSvc.retryRefund(marisol, failedRefund.id), /organizer_only/);
+  assert.equal((await refundSvc.retryRefund(wara, failedRefund.id)).ok, true);
+  await assert.rejects(refundSvc.retryRefund(wara, failedRefund.id), /not_failed/);
+  assert.equal(refunds.filter((r) => r.capture === failedRefund.captureId).length, 1);
+  console.log("✔ cancel before start: deposits refunded once, holds released, failed refund retried");
 
   // ------------------------------------------------ group chat
   // PayPal events are cards with data (the app translates them), never free text with private details.

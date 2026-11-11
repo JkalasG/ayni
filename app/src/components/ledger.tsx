@@ -13,7 +13,7 @@ import { fonts, space, type Palette } from "@/lib/theme";
 export type LedgerEntry = {
   id: string;
   at: string;
-  type: "CONTRIBUTION" | "GUARANTEE_COVER" | "UNPAID" | "POT" | "GUARANTEE_RETURN" | "COMPENSATION";
+  type: "CONTRIBUTION" | "DEPOSIT" | "REFUND" | "GUARANTEE_COVER" | "UNPAID" | "POT" | "GUARANTEE_RETURN" | "COMPENSATION";
   direction: "in" | "out" | "none";
   status: "DONE" | "IN_PROGRESS" | "FAILED";
   amountCents: number;
@@ -30,6 +30,8 @@ export type LedgerEntry = {
 type Tone = "verde" | "amarillo" | "rojo" | "turquesa" | "naranja";
 const LOOK: Record<LedgerEntry["type"], { icon: IconName; tone: Tone }> = {
   CONTRIBUTION: { icon: "pagar", tone: "verde" },
+  DEPOSIT: { icon: "pagar", tone: "turquesa" },
+  REFUND: { icon: "atras", tone: "naranja" },
   GUARANTEE_COVER: { icon: "garantia", tone: "turquesa" },
   UNPAID: { icon: "rechazar", tone: "rojo" },
   POT: { icon: "pozo", tone: "amarillo" },

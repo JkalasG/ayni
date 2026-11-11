@@ -267,6 +267,11 @@ export async function groupDetail(user: User, groupId: string) {
       })
     : [];
 
+  const failedRefunds = isOrganizer ? await db.refund.findMany({ where: { groupId, status: "FAILED" } }) : [];
+  const refundNames = failedRefunds.length
+    ? await db.user.findMany({ where: { id: { in: failedRefunds.map((r) => r.userId) } }, select: { id: true, name: true } })
+    : [];
+
   // PayPal money leaving the pot. Only the pot is public: a compensation names a debt and a guarantee
   // refund shows how much of it was used, so those are for the organizer and the person involved.
   const payouts = (
@@ -311,6 +316,7 @@ export async function groupDetail(user: User, groupId: string) {
     payouts,
     paypalMode: config.mode,
     failedPayouts: failedPayouts.map((p) => ({ id: p.id, kind: p.kind, status: p.status, amountCents: p.amountCents, name: p.membership.user.name })),
+    failedRefunds: failedRefunds.map((r) => ({ id: r.id, amountCents: r.amountCents, name: refundNames.find((u) => u.id === r.userId)?.name ?? "" })),
     potCents: group.contributionCents * group.memberships.length,
     requests: requests.map((r) => ({
       id: r.id,

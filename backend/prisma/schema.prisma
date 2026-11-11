@@ -26,6 +26,7 @@ enum GroupStatus {
   ORDERING // definiendo el orden de turnos
   ACTIVE // rondas en curso
   FINISHED
+  CANCELLED // el organizador lo canceló antes de empezar: depósitos devueltos
 }
 
 enum RoundStatus {
@@ -305,6 +306,35 @@ model AiLog {
   createdAt     DateTime @default(now())
 
   @@index([groupId, createdAt])
+}
+
+enum RefundStatus {
+  PENDING // recorded; PayPal's answer is not known yet (retried with the same idempotency key)
+  COMPLETED
+  FAILED // PayPal said no: the organizer can retry
+}
+
+/**
+ * Money that went back to a member through PayPal Refunds.
+ */
+model Refund {
+  id             String       @id @default(cuid())
+  groupId        String
+  userId         String
+  membershipId   String?
+  contributionId String?
+  captureId      String // the PayPal capture that was refunded
+  amountCents    Int
+  // GROUP_CANCELLED: we refunded a deposit · PAYPAL_REFUND / PAYPAL_REVERSAL: PayPal did it (manual refund, dispute)
+  reason         String
+  status         RefundStatus @default(PENDING)
+  paypalRefundId String?      @unique
+  dedupeKey      String?      @unique // one refund of ours per capture
+  attempts       Int          @default(0) // part of the idempotency key: changes only after a definite failure
+  reopened       Boolean      @default(false) // the contribution went back to "pending" (it no longer counts as paid)
+  createdAt      DateTime     @default(now())
+
+  @@index([groupId])
 }
 
 /**

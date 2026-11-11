@@ -30,6 +30,7 @@ import { trustProfile } from "./services/trust";
 import { groupDisputes } from "./services/disputes";
 import { handleWebhook } from "./services/webhooks";
 import { groupLedger, myLedger } from "./services/ledger";
+import { cancelGroup, retryRefund } from "./services/refunds";
 import { summarizeDisputes } from "./ai/agent";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
@@ -192,6 +193,8 @@ router.post(
   })
 );
 router.post("/groups/:id/start", ...authed(async (req, res) => res.json(await startGroup(req.user, req.params.id))));
+/** Organizer cancels a pasanaku that has not started: deposits are refunded, holds released. */
+router.post("/groups/:id/cancel", ...authed(async (req, res) => res.json(await cancelGroup(req.user, req.params.id))));
 
 /** Demo helper for the video: run the engine for this group right now. */
 router.post(
@@ -231,6 +234,7 @@ router.get(
 );
 
 router.post("/payouts/:id/retry", ...authed(async (req, res) => res.json(await retryPayout(req.user, req.params.id))));
+router.post("/refunds/:id/retry", ...authed(async (req, res) => res.json(await retryRefund(req.user, req.params.id))));
 
 // ---------------------------------------------------------------- actions
 

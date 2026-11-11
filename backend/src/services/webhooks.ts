@@ -8,7 +8,8 @@ import { formatUSD } from "../domain/rules";
 import { payoutOutcome } from "../domain/paypal-events";
 import { completeContribution, completeInvoice } from "./payments";
 import { completeDeposit } from "./admission";
-import { onDisputeCreated } from "./disputes";
+import { onDisputeChanged, onDisputeCreated } from "./disputes";
+import { onAuthorizationVoided, onCaptureDenied, onCaptureRefunded } from "./refunds";
 import { notify } from "./notify";
 
 export async function handleWebhook(event: any) {
@@ -25,6 +26,24 @@ export async function handleWebhook(event: any) {
     }
     case "CUSTOMER.DISPUTE.CREATED":
       await onDisputeCreated(event.resource);
+      return;
+    case "CUSTOMER.DISPUTE.UPDATED":
+      await onDisputeChanged(event.resource, false);
+      return;
+    case "CUSTOMER.DISPUTE.RESOLVED":
+      await onDisputeChanged(event.resource, true);
+      return;
+    case "PAYMENT.CAPTURE.REFUNDED":
+      await onCaptureRefunded(event.resource, "PAYPAL_REFUND");
+      return;
+    case "PAYMENT.CAPTURE.REVERSED":
+      await onCaptureRefunded(event.resource, "PAYPAL_REVERSAL");
+      return;
+    case "PAYMENT.CAPTURE.DENIED":
+      await onCaptureDenied(event.resource);
+      return;
+    case "PAYMENT.AUTHORIZATION.VOIDED":
+      await onAuthorizationVoided(event.resource);
       return;
     case "PAYMENT.CAPTURE.COMPLETED": {
       const orderId = event.resource?.supplementary_data?.related_ids?.order_id;

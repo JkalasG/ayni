@@ -26,7 +26,8 @@ type ChatEvent =
   | { type: "ready"; round: number }
   | { type: "joined"; name: string; newcomer: boolean }
   | { type: "dispute"; round: number }
-  | { type: "finished" };
+  | { type: "finished" }
+  | { type: "cancelled" };
 type Msg = {
   id: string;
   role: "user" | "assistant" | "system";
@@ -230,6 +231,9 @@ function EventCard({ m }: { m: Msg }) {
   } else if (e?.type === "finished") {
     icon = "racha";
     line = t("evFinished");
+  } else if (e?.type === "cancelled") {
+    icon = "rechazar";
+    line = t("evCancelled");
   }
   return (
     <View accessible accessibilityLabel={`${line}${detail ? `. ${detail}` : ""}`} style={{ alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.surfaceAlt, borderRadius: radius.sm, paddingVertical: 8, paddingHorizontal: 12, maxWidth: "92%" }}>

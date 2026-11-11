@@ -66,7 +66,7 @@ type Action = { id: string; type: string; summary: string; expiresAt: string; pa
 type Group = {
   id: string;
   name: string;
-  status: "FORMING" | "ORDERING" | "ACTIVE" | "FINISHED";
+  status: "FORMING" | "ORDERING" | "ACTIVE" | "FINISHED" | "CANCELLED";
   inviteCode: string;
   organizerId: string;
   contributionCents: number;
@@ -82,6 +82,7 @@ type Group = {
   memberships: Member[];
   requests: JoinReq[];
   failedPayouts: { id: string; kind: string; status: "FAILED" | "UNKNOWN"; amountCents: number; name: string }[];
+  failedRefunds: { id: string; amountCents: number; name: string }[];
   rounds: Round[];
   actions: Action[];
   myMembershipId: string;
@@ -93,7 +94,16 @@ type Group = {
 };
 
 const statusColor = (c: Palette, s: Group["status"]) =>
-  ({ FORMING: c.naranja.text, ORDERING: c.turquesa.text, ACTIVE: c.verde.text, FINISHED: c.muted })[s];
+  ({ FORMING: c.naranja.text, ORDERING: c.turquesa.text, ACTIVE: c.verde.text, FINISHED: c.muted, CANCELLED: c.rojo.text })[s];
+
+/** Server error codes the organizer can run into here, in plain words. Anything else shows a generic message. */
+const ERRORS: Record<string, Key> = {
+  group_already_started: "err_group_already_started",
+  already_cancelled: "err_already_cancelled",
+  not_failed: "err_not_failed",
+  paypal_error: "err_paypal_error",
+  organizer_only: "err_organizer_only",
+};
 
 /** The pot is the treasure: a solid gold block with dark ink, 10:1 contrast in both modes. */
 const GOLD = "#FFC93C";
@@ -117,6 +127,7 @@ export default function GroupScreen() {
   const [banner, setBanner] = useState<{ text: string; tone: "ok" | "error" | "info" } | null>(null);
   const [confetti, setConfetti] = useState(0);
   const [pot, setPot] = useState<{ round: Round; streak: number | null } | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const lastMine = useRef<string | null>(null);
   const load = useCallback(async () => {
     setG(await api<Group>(`/groups/${id}`));
@@ -181,7 +192,7 @@ export default function GroupScreen() {
       await fn();
       await load();
     } catch (e) {
-      const msg = e instanceof ApiError ? e.code : String(e);
+      const msg = e instanceof ApiError ? (ERRORS[e.code] ? t(ERRORS[e.code]) : e.code) : String(e);
       Platform.OS === "web" ? setBanner({ text: msg, tone: "error" }) : Alert.alert("Ayni", msg);
     } finally {
       setBusy(null);
@@ -441,6 +452,22 @@ export default function GroupScreen() {
     </SteppedBox>
   );
 
+  const failedRefunds = g.isOrganizer && g.failedRefunds.length > 0 && (
+    <View style={{ borderLeftWidth: 4, borderColor: c.rojo.fill, backgroundColor: c.surface, padding: space(4), gap: space(3) }}>
+      <Text style={{ fontFamily: fonts.display, fontSize: 16, color: c.ink }}>{t("failedRefunds")}</Text>
+      {g.failedRefunds.map((r) => (
+        <View key={r.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <P bold>
+              {r.name}, {money(r.amountCents)}
+            </P>
+          </View>
+          <Button compact kind="secondary" title={t("retry")} loading={busy === r.id} onPress={() => run(r.id, () => api(`/refunds/${r.id}/retry`, { body: {} }))} />
+        </View>
+      ))}
+    </View>
+  );
+
   const failed = g.isOrganizer && g.failedPayouts.length > 0 && (
     <View style={{ borderLeftWidth: 4, borderColor: c.rojo.fill, backgroundColor: c.surface, padding: space(4), gap: space(3) }}>
       <Text style={{ fontFamily: fonts.display, fontSize: 16, color: c.ink }}>{t("failedPayouts")}</Text>
@@ -510,8 +537,39 @@ export default function GroupScreen() {
       {g.demoMode && g.status === "ACTIVE" && (
         <Button kind="ghost" title={t("runEngine")} loading={busy === "tick"} onPress={() => run("tick", () => api(`/groups/${g.id}/tick`, { body: {} }))} />
       )}
+      {/* Cancelling is only possible before it starts, and always asks first: it cannot be undone. */}
+      {(g.status === "FORMING" || g.status === "ORDERING") &&
+        (confirmCancel ? (
+          <View accessibilityRole="alert" style={{ borderLeftWidth: 4, borderColor: c.rojo.fill, backgroundColor: c.surface, padding: space(4), gap: space(3) }}>
+            <P bold>{t("cancelAsk")}</P>
+            <P muted>{t("cancelExplain")}</P>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Button compact kind="secondary" title={t("cancelNo")} onPress={() => setConfirmCancel(false)} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  compact
+                  kind="danger"
+                  title={t("cancelYes")}
+                  loading={busy === "cancel"}
+                  onPress={() =>
+                    run("cancel", async () => {
+                      await api(`/groups/${g.id}/cancel`, { body: {} });
+                      setConfirmCancel(false);
+                    })
+                  }
+                />
+              </View>
+            </View>
+          </View>
+        ) : (
+          <Button kind="ghost" title={t("cancelGroup")} onPress={() => setConfirmCancel(true)} />
+        ))}
     </View>
   );
+
+  const cancelledNote = g.status === "CANCELLED" ? <Notice>{t("cancelledNote")}</Notice> : null;
 
   const paypalPanel = g.status !== "FORMING" || g.payouts.length > 0 || g.rounds.length > 0 ? (
     <PayPalActivity
@@ -570,6 +628,7 @@ export default function GroupScreen() {
           <View style={{ maxWidth: 1240, width: "100%", alignSelf: "center", gap: space(7) }}>
             {header}
             {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
+            {cancelledNote}
             <View style={{ flexDirection: "row", gap: space(8), alignItems: "flex-start" }}>
               <View style={{ flex: 1, gap: space(7), minWidth: 0 }}>
                 {potCard}
@@ -582,6 +641,7 @@ export default function GroupScreen() {
                 {payPanel}
                 {decisions}
                 {failed}
+                {failedRefunds}
                 {paypalPanel}
                 {links}
               </View>
@@ -604,11 +664,13 @@ export default function GroupScreen() {
         refreshControl={<RefreshControl refreshing={false} onRefresh={() => load().catch(() => {})} />}
       >
         {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
+        {cancelledNote}
         {potCard}
         {decisions}
         {weave}
         {!mustPay && payPanel}
         {failed}
+        {failedRefunds}
         {paypalPanel}
         {invite}
         {controls}
