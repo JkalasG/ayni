@@ -27,6 +27,7 @@ const seenBatches = new Set<string>();
 const refunds: { id: string; capture: string; requestId: string }[] = [];
 let loseNextRefundResponse = false; // PayPal refunds, but our request times out (503)
 let failNextRefund = false; // PayPal answers with a definitive error
+let balanceCents: number | null = 10_000_000; // platform account's available balance; null = the Balances API is not enabled (403)
 const FEE_CENTS = 107; // what the fake PayPal reports as its fee on every capture
 let loseNextPayoutResponse = false; // PayPal gets the payout but our request times out (503)
 
@@ -91,6 +92,10 @@ const server = http.createServer((req, res) => {
         return send(503, { name: "SERVICE_UNAVAILABLE" });
       }
       return send(201, { id: rid, status: "COMPLETED" });
+    }
+    if (u === "/v1/reporting/balances") {
+      if (balanceCents == null) return send(403, { name: "NOT_AUTHORIZED" });
+      return send(200, { balances: [{ currency: "USD", available_balance: { currency_code: "USD", value: (balanceCents / 100).toFixed(2) } }] });
     }
     if (u === "/v1/payments/payouts") {
       const item = j.items[0];
@@ -277,11 +282,33 @@ async function main() {
   assert.equal(payouts.length, payoutsBefore + 1, "the retried pot was paid exactly once");
   console.log("✔ round 3: lost PayPal response -> UNKNOWN -> same-id retry, paid once");
 
-  // Rounds 4..5: everyone pays. In round 5 the defaulter receives: their debt goes to round-1's recipient.
-  for (let r = 4; r <= 5; r++) {
-    for (const m of members) await pay(m.user, r);
-    await releaseIfReady(r);
-  }
+  // Round 4: everyone pays, but the platform's PayPal account is short. Nothing may be sent.
+  for (const m of members) await pay(m.user, 4);
+  balanceCents = 100;
+  await engine.tickGroup(barrio.id);
+  const lowAction = await db.pendingAction.findFirstOrThrow({ where: { groupId: barrio.id, type: "RELEASE_POT", status: "PENDING" } });
+  const sentBeforeLow = payouts.length;
+  await assert.rejects(actions.resolveAction(rosa, lowAction.id, true), /platform_balance_low/);
+  await assert.rejects(actions.resolveAction(rosa, lowAction.id, true), /platform_balance_low/);
+  assert.equal(payouts.length, sentBeforeLow, "no payout left while the balance was short");
+  assert.equal((await db.round.findFirstOrThrow({ where: { groupId: barrio.id, number: 4 } })).status, "READY");
+  assert.equal((await db.pendingAction.findUniqueOrThrow({ where: { id: lowAction.id } })).status, "PENDING", "the decision is still there to try again");
+  assert.equal(await db.notification.count({ where: { userId: rosa.id, title: "Saldo insuficiente en PayPal" } }), 1, "told once, not on every attempt");
+  // The silent timeout hits the same wall, and keeps the decision alive as well.
+  await db.pendingAction.update({ where: { id: lowAction.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+  await engine.tickGroup(barrio.id);
+  assert.equal(payouts.length, sentBeforeLow);
+  assert.equal((await db.pendingAction.findUniqueOrThrow({ where: { id: lowAction.id } })).status, "PENDING");
+  // If PayPal cannot tell us the balance (feature not enabled), that is "unknown", not "zero": the pot goes out.
+  balanceCents = null;
+  await releaseIfReady(4);
+  assert.ok(payouts.length > sentBeforeLow);
+  balanceCents = 10_000_000;
+  console.log("✔ round 4: pot held back while the platform balance was short, released afterwards");
+
+  // Round 5: everyone pays. The defaulter receives: their debt goes to round-1's recipient.
+  for (const m of members) await pay(m.user, 5);
+  await releaseIfReady(5);
   const g = await db.group.findUniqueOrThrow({ where: { id: barrio.id } });
   assert.equal(g.status, "FINISHED");
   const comp = await db.payout.findMany({ where: { kind: "COMPENSATION" } });

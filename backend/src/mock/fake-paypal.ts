@@ -218,6 +218,9 @@ export function fakePayPal(webBase: string): Router {
     })
   );
 
+  // ---------------- Balances: the simulated platform account always has funds
+  r.get("/v1/reporting/balances", (_req, res) => res.json({ balances: [{ currency: "USD", available_balance: { currency_code: "USD", value: "100000.00" } }] }));
+
   r.post("/v1/notifications/verify-webhook-signature", (_req, res) => res.json({ verification_status: "SUCCESS" }));
 
   // ---------------- What "PayPal" has seen, to show in a demo

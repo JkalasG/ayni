@@ -147,10 +147,7 @@ export async function releasePot(roundId: string) {
     },
   });
   if (!round) throw new HttpError(404, "round_not_found");
-
-  // Claim the round atomically so a double click / retry cannot pay twice.
-  const claim = await db.round.updateMany({ where: { id: roundId, status: "READY" }, data: { status: "PAID_OUT" } });
-  if (claim.count === 0) return;
+  if (round.status !== "READY") return;
 
   // Paid or covered contributions (+ late fees), plus whatever was recovered from a defaulter's guarantee.
   const pot = round.contributions.reduce(
@@ -159,6 +156,14 @@ export async function releasePot(roundId: string) {
   );
   const members = round.group.memberships.length;
   const held = retentionCents(pot, round.recipient.retentionPct, round.group.contributionCents, round.recipient.turn!, members);
+
+  // Before touching anything: is the money really there? Everything that leaves now (pot + compensations)
+  // adds up to pot - held. If PayPal says the account is short, nothing is sent and the round stays ready.
+  await assertPlatformCanPay(pot - held, round.group);
+
+  // Claim the round atomically so a double click / retry cannot pay twice.
+  const claim = await db.round.updateMany({ where: { id: roundId, status: "READY" }, data: { status: "PAID_OUT" } });
+  if (claim.count === 0) return;
 
   // If the recipient left a contribution unpaid in an earlier round, that debt comes out of their pot
   // and goes to whoever received less because of it.
@@ -228,6 +233,30 @@ export async function releasePot(roundId: string) {
   await notify(round.recipient.userId, round.groupId, "pot", "¡Recibiste el pozo!", `$${formatUSD(net)} llegaron a tu PayPal.`);
   await openNextRound(round.groupId, round.number);
   await maybeReleaseRetention(round.recipientId);
+}
+
+/**
+ * Ask PayPal for the platform account's available balance before a pot leaves.
+ * Only a balance we positively know to be too low stops the release; "unknown" does not
+ * (the payout itself is still protected: a rejected payout is recorded and can be retried).
+ */
+async function assertPlatformCanPay(neededCents: number, group: { id: string; name: string; organizerId: string }) {
+  if (neededCents <= 0) return;
+  const available = await paypal.availableBalanceCents();
+  if (available == null || available >= neededCents) return;
+  console.error(`platform balance low: need ${neededCents}, have ${available} (group ${group.id})`);
+  const title = "Saldo insuficiente en PayPal";
+  // One notice is enough while the situation lasts: the release is retried by itself.
+  const told = await db.notification.findFirst({ where: { userId: group.organizerId, groupId: group.id, title, createdAt: { gte: new Date(Date.now() - 6 * 3600_000) } } });
+  if (!told)
+    await notify(
+      group.organizerId,
+      group.id,
+      "action",
+      title,
+      `La cuenta PayPal de Ayni no tiene saldo disponible para enviar el pozo de ${group.name}. No se envió nada y nadie pierde su dinero: se volverá a intentar solo.`
+    );
+  throw new HttpError(409, "platform_balance_low");
 }
 
 async function sendRecordedPayout(

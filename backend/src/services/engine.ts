@@ -104,14 +104,14 @@ export async function tickGroup(groupId: string, now = new Date()) {
       }
     }
   } else if (round?.status === "READY") {
-    // The organizer rejected the release: ask again after one approval window.
+    // The organizer rejected the release (or it could not be completed): ask again after one approval window.
     const actions = await db.pendingAction.findMany({
       where: { groupId, type: "RELEASE_POT", payload: { path: ["roundId"], equals: round.id } },
       orderBy: { createdAt: "desc" },
       take: 1,
     });
     const last = actions[0];
-    if (!last || (last.status === "REJECTED" && last.resolvedAt && now.getTime() - last.resolvedAt.getTime() > w.approval)) {
+    if (!last || (last.status !== "PENDING" && last.resolvedAt && now.getTime() - last.resolvedAt.getTime() > w.approval)) {
       await askToReleasePot(groupId, round.id, round.number, round.recipient.user.name, group.organizerId, now, w.approval);
     }
   }

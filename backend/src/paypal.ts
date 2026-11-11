@@ -332,6 +332,24 @@ export async function getPayoutBatch(batchId: string): Promise<any> {
   return call("payoutStatus", `/v1/payments/payouts/${batchId}`, { method: "GET" });
 }
 
+// ---------- Balances (reporting) ----------
+
+/**
+ * USD available in the platform's PayPal account, or null when we cannot know
+ * (the Balances feature is not enabled for the app, PayPal did not answer…).
+ * Callers must treat null as "unknown", never as zero.
+ */
+export async function availableBalanceCents(): Promise<number | null> {
+  try {
+    const res = await call<any>("balances", "/v1/reporting/balances?currency_code=USD", { method: "GET" });
+    const usd = (res.balances ?? []).find((b: any) => b.currency === "USD");
+    return toCents(usd?.available_balance?.value) ?? null;
+  } catch (e) {
+    console.warn("PayPal balance unavailable:", e instanceof PayPalError ? `${e.status}` : e);
+    return null;
+  }
+}
+
 // ---------- Log in with PayPal (Identity) ----------
 
 export function loginUrl(redirectUri: string, state: string): string {

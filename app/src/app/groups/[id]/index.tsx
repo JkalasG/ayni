@@ -103,6 +103,7 @@ const ERRORS: Record<string, Key> = {
   not_failed: "err_not_failed",
   paypal_error: "err_paypal_error",
   organizer_only: "err_organizer_only",
+  platform_balance_low: "err_platform_balance_low",
 };
 
 /** The pot is the treasure: a solid gold block with dark ink, 10:1 contrast in both modes. */

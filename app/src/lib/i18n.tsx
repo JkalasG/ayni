@@ -456,6 +456,7 @@ const es = {
   err_not_failed: "Ese envío ya se reintentó.",
   err_paypal_error: "PayPal no respondió. Inténtalo de nuevo en un momento.",
   err_organizer_only: "Solo el organizador puede hacer esto.",
+  err_platform_balance_low: "La cuenta PayPal de Ayni no tiene saldo disponible para este pozo. No se envió nada; se volverá a intentar solo.",
 };
 
 const en: typeof es = {
@@ -911,6 +912,7 @@ const en: typeof es = {
   err_not_failed: "That payout was already retried.",
   err_paypal_error: "PayPal did not answer. Try again in a moment.",
   err_organizer_only: "Only the organizer can do this.",
+  err_platform_balance_low: "Ayni's PayPal account does not have enough available balance for this pot. Nothing was sent; it will be retried automatically.",
 };
 
 export type Lang = "es" | "en";

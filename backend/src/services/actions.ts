@@ -10,6 +10,7 @@ import { applyOrder } from "./groups";
 import { releasePot, waiveContribution } from "./payments";
 import { acceptRequest, rejectRequest } from "./admission";
 import { postToGroupChat } from "./notify";
+import { windows } from "./windows";
 
 export async function resolveAction(user: User, actionId: string, approve: boolean) {
   const action = await db.pendingAction.findUnique({ where: { id: actionId }, include: { group: true } });
@@ -42,7 +43,19 @@ export async function execute(action: PendingAction, finalStatus: "APPROVED" | "
 
   switch (action.type) {
     case "RELEASE_POT":
-      await releasePot(payload.roundId);
+      try {
+        await releasePot(payload.roundId);
+      } catch (e) {
+        if (e instanceof HttpError && e.message === "platform_balance_low") {
+          // Nothing was sent. Put the decision back so it is tried again (by the organizer or by the timeout).
+          const group = await db.group.findUniqueOrThrow({ where: { id: action.groupId } });
+          await db.pendingAction.update({
+            where: { id: action.id },
+            data: { status: "PENDING", resolvedAt: null, expiresAt: new Date(Date.now() + windows(group).approval) },
+          });
+        }
+        throw e;
+      }
       break;
     case "APPROVE_ORDER":
       await applyOrder(action.groupId, payload.order);
