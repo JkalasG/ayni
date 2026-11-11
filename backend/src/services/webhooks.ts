@@ -11,6 +11,8 @@ import { completeDeposit } from "./admission";
 import { onDisputeChanged, onDisputeCreated } from "./disputes";
 import { onAuthorizationVoided, onCaptureDenied, onCaptureRefunded } from "./refunds";
 import { notify } from "./notify";
+import { onVaultCreated, onVaultDeleted, settleCapture } from "./autopay";
+import { toCents } from "../paypal";
 
 export async function handleWebhook(event: any) {
   const type = String(event?.event_type ?? "");
@@ -45,13 +47,42 @@ export async function handleWebhook(event: any) {
     case "PAYMENT.AUTHORIZATION.VOIDED":
       await onAuthorizationVoided(event.resource);
       return;
-    case "PAYMENT.CAPTURE.COMPLETED": {
-      const orderId = event.resource?.supplementary_data?.related_ids?.order_id;
-      if (orderId) await completeContribution(orderId).catch(() => undefined);
+    case "PAYMENT.CAPTURE.COMPLETED":
+      await onCaptureCompleted(event.resource);
       return;
-    }
+    case "VAULT.PAYMENT-TOKEN.CREATED":
+      await onVaultCreated(event.resource);
+      return;
+    case "VAULT.PAYMENT-TOKEN.DELETED":
+      await onVaultDeleted(event.resource);
+      return;
   }
   if (payoutOutcome(type)) await onPayoutItem(type, event.resource);
+}
+
+/**
+ * PayPal captured money. Normally it is the order we are tracking for a contribution. If not
+ * (an automatic charge whose answer we lost, or an older order the member approved later), the
+ * capture still names our contribution: record it, or refund it if that contribution is already paid.
+ */
+async function onCaptureCompleted(resource: any) {
+  const orderId: string | undefined = resource?.supplementary_data?.related_ids?.order_id;
+  if (orderId && (await db.contribution.findUnique({ where: { paypalOrderId: orderId } }))) {
+    await completeContribution(orderId).catch(() => undefined);
+    return;
+  }
+  const customId: string | undefined = resource?.custom_id;
+  const captureId: string | undefined = resource?.id;
+  if (!customId || !captureId) return;
+  const c = await db.contribution.findUnique({ where: { id: customId } });
+  if (!c) return; // a deposit or something that is not a contribution
+  const amount = toCents(resource?.amount?.value) ?? 0;
+  if (amount < c.amountCents) {
+    console.error("capture smaller than the contribution, ignored", captureId, amount, c.amountCents);
+    return;
+  }
+  const b = resource?.seller_receivable_breakdown;
+  await settleCapture(c.id, { captureId, orderId, feeCents: toCents(b?.paypal_fee?.value), netCents: toCents(b?.net_amount?.value) });
 }
 
 /** A payout reached the member, failed, or is waiting for them at PayPal. */

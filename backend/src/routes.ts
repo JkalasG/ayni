@@ -31,6 +31,7 @@ import { groupDisputes } from "./services/disputes";
 import { handleWebhook } from "./services/webhooks";
 import { groupLedger, myLedger } from "./services/ledger";
 import { cancelGroup, retryRefund } from "./services/refunds";
+import { removeSavedMethod, setAutoPay } from "./services/autopay";
 import { summarizeDisputes } from "./ai/agent";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
@@ -88,7 +89,7 @@ router.post(
 export const COUNTRIES = ["AR", "BO", "BR", "CL", "CO", "EC", "MX", "PE", "PY", "US", "ES", "IT"] as const;
 
 /** What the app may know about the signed-in person. PayPal account ids stay on the server. */
-const publicUser = ({ paypalUserId: _a, paypalPayerId: _b, pushToken: _c, ...u }: AuthedRequest["user"]) => u;
+const publicUser = ({ paypalUserId: _a, paypalPayerId: _b, pushToken: _c, paypalVaultId, ...u }: AuthedRequest["user"]) => ({ ...u, hasSavedMethod: !!paypalVaultId });
 
 router.get("/me", ...authed(async (req, res) => res.json(publicUser(req.user))));
 router.patch(
@@ -99,6 +100,8 @@ router.patch(
   })
 );
 router.get("/me/profile", ...authed(async (req, res) => res.json(await trustProfile(req.user.id))));
+/** Remove my saved PayPal method: deleted at PayPal, and automatic payment stops in all my groups. */
+router.delete("/me/payment-method", ...authed(async (req, res) => res.json(await removeSavedMethod(req.user))));
 /** Everything I paid and received through PayPal, across my groups. */
 router.get("/me/payments", ...authed(async (req, res) => res.json(await myLedger(req.user))));
 router.post(
@@ -251,8 +254,17 @@ router.post(
 router.post(
   "/contributions/:id/checkout",
   ...authed(async (req, res) => {
-    const { redirect, popup } = z.object({ redirect: z.string(), popup: z.boolean().optional() }).parse(req.body);
-    res.json(await startCheckout(req.user, req.params.id, redirect, popup === true));
+    const { redirect, popup, save } = z.object({ redirect: z.string(), popup: z.boolean().optional(), save: z.boolean().optional() }).parse(req.body);
+    res.json(await startCheckout(req.user, req.params.id, redirect, popup === true, save === true));
+  })
+);
+
+/** Turn my automatic payment on or off in this group (on needs a PayPal method I saved while paying). */
+router.post(
+  "/groups/:id/autopay",
+  ...authed(async (req, res) => {
+    const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+    res.json(await setAutoPay(req.user, req.params.id, enabled));
   })
 );
 

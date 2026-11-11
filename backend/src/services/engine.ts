@@ -12,6 +12,7 @@ import { reminderStage, STAGE_ORDER, lateFeeCents, formatUSD } from "../domain/r
 import { writeReminder } from "../ai/agent";
 import { coverWithRetention, retryUnknownPayouts, sendOverdueInvoice } from "./payments";
 import { retryPendingRefunds } from "./refunds";
+import { autoPayTick } from "./autopay";
 import { execute } from "./actions";
 import { notify, postToGroupChat } from "./notify";
 import { windows } from "./windows";
@@ -38,6 +39,9 @@ export async function tickGroup(groupId: string, now = new Date()) {
   if (round?.status === "COLLECTING") {
     for (const c of round.contributions) {
       if (c.status !== "PENDING") continue;
+      // Automatic payment first: tell the member, later charge. A rule of the engine, never the AI.
+      const auto = await autoPayTick(c, round, group, now, w.lead).catch((e) => (console.error("autopay tick failed", c.id, e), "off" as const));
+      if (auto === "paid") continue;
       const stage = reminderStage(now, round.dueAt, w.grace, w.lead);
       const stageIdx = STAGE_ORDER.indexOf(stage);
 
@@ -50,6 +54,8 @@ export async function tickGroup(groupId: string, now = new Date()) {
         if (stageIdx >= FIRM && !c.paypalInvoiceId) {
           await sendOverdueInvoice(c.id).catch((e) => console.error("invoice failed", c.id, e));
         }
+        // Their automatic payment is on its way and they were told: no "remember to pay" on top of it.
+        if (auto === "handling" && stage === "friendly") continue;
         const text = await writeReminder({
           groupId,
           userId: c.membership.userId,

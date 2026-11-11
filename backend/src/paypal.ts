@@ -61,11 +61,13 @@ export async function createOrder(p: {
   intent?: "CAPTURE" | "AUTHORIZE";
   /** Popup (JS SDK v6): the order carries no redirect urls; the SDK reports the approval to the page. */
   popup?: boolean;
+  /** The member asked to save their PayPal for automatic contributions: PayPal shows them the agreement. */
+  vault?: boolean;
 }): Promise<{ id: string; approveUrl: string }> {
   const intent = p.intent ?? "CAPTURE";
   const order = await call<{ id: string; links: { rel: string; href: string }[] }>("createOrder", "/v2/checkout/orders", {
     method: "POST",
-    idempotencyKey: `order-${intent}-${p.customId}-${p.amountCents}`,
+    idempotencyKey: `order-${intent}-${p.customId}-${p.amountCents}${p.vault ? "-vault" : ""}`,
     body: JSON.stringify({
       intent,
       purchase_units: [
@@ -81,6 +83,7 @@ export async function createOrder(p: {
         : {
             payment_source: {
               paypal: {
+                ...(p.vault ? { attributes: { vault: { store_in_vault: "ON_SUCCESS", usage_type: "MERCHANT", customer_type: "CONSUMER" } } } : {}),
                 experience_context: {
                   brand_name: "Ayni",
                   user_action: "PAY_NOW",
@@ -113,17 +116,21 @@ export type CaptureResult = {
   /** PayPal's own numbers for this capture (seller_receivable_breakdown). Undefined when PayPal does not send them. */
   feeCents?: number;
   netCents?: number;
+  /** Set when the buyer agreed to save their PayPal in this checkout and PayPal already vaulted it. */
+  vaultId?: string;
 };
 
 function readCapture(res: any): CaptureResult {
   const capture = res.purchase_units?.[0]?.payments?.captures?.[0];
   const b = capture?.seller_receivable_breakdown;
+  const vault = res.payment_source?.paypal?.attributes?.vault;
   return {
     status: res.status,
     captureId: capture?.id,
     customId: capture?.custom_id,
     feeCents: toCents(b?.paypal_fee?.value),
     netCents: toCents(b?.net_amount?.value),
+    vaultId: vault?.status === "VAULTED" && typeof vault.id === "string" ? vault.id : undefined,
   };
 }
 
@@ -174,6 +181,45 @@ export async function voidAuthorization(authorizationId: string): Promise<void> 
     method: "POST",
     idempotencyKey: `void-${authorizationId}`,
   });
+}
+
+// ---------- Vault: automatic contributions with a saved PayPal ----------
+
+/**
+ * Charge a saved PayPal method (merchant-initiated). `requestId` makes it idempotent:
+ * asking again with the same id returns the same order instead of charging twice.
+ */
+export async function chargeVault(p: {
+  vaultId: string;
+  amountCents: number;
+  customId: string; // our contribution id
+  description: string;
+  requestId: string;
+}): Promise<CaptureResult & { orderId: string }> {
+  const res = await call<any>("chargeVault", "/v2/checkout/orders", {
+    method: "POST",
+    idempotencyKey: p.requestId,
+    body: JSON.stringify({
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          reference_id: p.customId,
+          custom_id: p.customId,
+          description: p.description.slice(0, 127),
+          amount: { currency_code: "USD", value: formatUSD(p.amountCents) },
+        },
+      ],
+      payment_source: { paypal: { vault_id: p.vaultId } },
+    }),
+  });
+  // With a vaulted method PayPal usually completes the order in this same call.
+  if (res.status === "APPROVED") return { ...(await captureOrder(res.id)), orderId: res.id };
+  return { ...readCapture(res), orderId: res.id };
+}
+
+/** The member removed their saved PayPal: delete the token at PayPal. */
+export async function deleteVaultToken(vaultId: string): Promise<void> {
+  await call("deleteVaultToken", `/v3/vault/payment-tokens/${encodeURIComponent(vaultId)}`, { method: "DELETE" });
 }
 
 // ---------- Payments v2: refunds ----------

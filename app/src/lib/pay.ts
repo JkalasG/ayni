@@ -27,11 +27,12 @@ export async function openPayPal(approveUrl: string, redirect: string): Promise<
 }
 
 /** Pay one contribution with PayPal Checkout. Web: popup over the app. Native / fallback: approval page. */
-export async function payContribution(contributionId: string, groupId: string): Promise<PayResult> {
-  if (popupReady()) return payInPopup(contributionId); // nothing awaited before this: the popup needs the click
+export async function payContribution(contributionId: string, groupId: string, saveMethod = false): Promise<PayResult> {
+  // Saving a PayPal for automatic payment needs PayPal's own page (it shows the agreement), so no popup then.
+  if (popupReady() && !saveMethod) return payInPopup(contributionId); // nothing awaited before this: the popup needs the click
   const redirect = returnUrl(`groups/${groupId}`);
   const { approveUrl } = await api<{ approveUrl: string }>(`/contributions/${contributionId}/checkout`, {
-    body: { redirect },
+    body: { redirect, ...(saveMethod ? { save: true } : {}) },
   });
   return openPayPal(approveUrl, redirect);
 }

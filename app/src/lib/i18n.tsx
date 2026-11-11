@@ -456,7 +456,16 @@ const es = {
   err_not_failed: "Ese envío ya se reintentó.",
   err_paypal_error: "PayPal no respondió. Inténtalo de nuevo en un momento.",
   err_organizer_only: "Solo el organizador puede hacer esto.",
-  err_platform_balance_low: "La cuenta PayPal de Ayni no tiene saldo disponible para este pozo. No se envió nada; se volverá a intentar solo.",
+  err_platform_balance_low: "La cuenta PayPal de Ayni no tiene saldo disponible para este pozo. No se envió nada; se volverá a intentar solo.",  apSave: "Guardar mi PayPal y pagar automáticamente cada ronda",
+  apSaveHint: "PayPal te pedirá confirmar. Te avisamos antes de cada cobro y puedes quitarlo cuando quieras.",
+  apTitle: "Pago automático",
+  apOn: "Activado: PayPal cobrará tu aporte un día antes del vencimiento. Te avisamos antes de cada cobro.",
+  apOff: "Desactivado: pagas cada aporte tú mismo.",
+  apTurnOn: "Activar en este grupo",
+  apTurnOff: "Desactivar",
+  apRemove: "Quitar mi PayPal guardado",
+  apRemoved: "Listo: tu PayPal guardado se eliminó y el pago automático se apagó en todos tus grupos.",
+  err_no_saved_method: "Primero guarda tu PayPal al pagar un aporte.",
 };
 
 const en: typeof es = {
@@ -912,7 +921,16 @@ const en: typeof es = {
   err_not_failed: "That payout was already retried.",
   err_paypal_error: "PayPal did not answer. Try again in a moment.",
   err_organizer_only: "Only the organizer can do this.",
-  err_platform_balance_low: "Ayni's PayPal account does not have enough available balance for this pot. Nothing was sent; it will be retried automatically.",
+  err_platform_balance_low: "Ayni's PayPal account does not have enough available balance for this pot. Nothing was sent; it will be retried automatically.",  apSave: "Save my PayPal and pay automatically every round",
+  apSaveHint: "PayPal will ask you to confirm. We tell you before every charge and you can remove it any time.",
+  apTitle: "Automatic payment",
+  apOn: "On: PayPal will charge your contribution a day before it is due. We tell you before every charge.",
+  apOff: "Off: you pay each contribution yourself.",
+  apTurnOn: "Turn on in this circle",
+  apTurnOff: "Turn off",
+  apRemove: "Remove my saved PayPal",
+  apRemoved: "Done: your saved PayPal was deleted and automatic payment is off in all your circles.",
+  err_no_saved_method: "First save your PayPal while paying a contribution.",
 };
 
 export type Lang = "es" | "en";

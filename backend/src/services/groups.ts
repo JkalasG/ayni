@@ -301,7 +301,7 @@ export async function groupDetail(user: User, groupId: string) {
       : { ...c, status: c.status === "COVERED" ? "PAID" : c.status === "DEFAULTED" ? "CLOSED" : c.status, lateFeeCents: 0 };
   const rounds = group.rounds.map((r) => ({ ...r, contributions: r.contributions.map(mask) }));
   const memberships = group.memberships.map((m) =>
-    isOrganizer || m.id === me.id ? m : { ...m, retentionHeldCents: 0, riskScore: 0, riskReason: null }
+    isOrganizer || m.id === me.id ? m : { ...m, retentionHeldCents: 0, riskScore: 0, riskReason: null, autoPay: false }
   );
 
   return {
@@ -313,6 +313,8 @@ export async function groupDetail(user: User, groupId: string) {
     myMembershipId: me.id,
     isOrganizer,
     unreadChat: await unreadCount(me),
+    autoPay: me.autoPay,
+    hasSavedMethod: !!user.paypalVaultId,
     payouts,
     paypalMode: config.mode,
     failedPayouts: failedPayouts.map((p) => ({ id: p.id, kind: p.kind, status: p.status, amountCents: p.amountCents, name: p.membership.user.name })),

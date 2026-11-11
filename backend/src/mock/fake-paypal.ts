@@ -14,6 +14,7 @@ type Order = {
   returnUrl: string;
   cancelUrl: string;
   status: "CREATED" | "APPROVED" | "COMPLETED";
+  vault?: boolean; // the buyer is asked to save their PayPal for automatic contributions
   captureId?: string;
   authorizationId?: string;
 };
@@ -24,6 +25,8 @@ const batches = new Map<string, { batchId: string; email: string; amount: string
 const invoices = new Map<string, { total: string; email: string; status: string }>();
 const captures: { id: string; amount: string; description: string; createdAt: Date }[] = [];
 const refunds = new Map<string, { id: string; captureId: string; amount: string }>(); // by PayPal-Request-Id
+const vaults = new Set<string>(); // saved payment methods
+const vaultCharges = new Map<string, unknown>(); // by PayPal-Request-Id
 let seq = 0;
 // The mock database survives restarts but this counter does not: a per-run prefix keeps ids unique
 // (paypalInvoiceId, order and capture ids are unique columns).
@@ -77,6 +80,25 @@ export function fakePayPal(webBase: string): Router {
   });
 
   // ---------------- Orders v2
+  r.post("/v2/checkout/orders", (req, res, next) => {
+    // Automatic contribution: charge a saved method, created and captured in one call.
+    const vaultId = req.body.payment_source?.paypal?.vault_id;
+    if (!vaultId) return next();
+    const requestId = String(req.headers["paypal-request-id"] ?? "");
+    if (vaultCharges.has(requestId)) return res.status(201).json(vaultCharges.get(requestId));
+    if (!vaults.has(vaultId)) return res.status(422).json({ name: "UNPROCESSABLE_ENTITY", details: [{ issue: "PAYMENT_SOURCE_INFO_CANNOT_BE_VERIFIED" }] });
+    const pu = req.body.purchase_units?.[0] ?? {};
+    const amount = pu.amount?.value ?? "0.00";
+    const captureId = sim("CAPTURE");
+    captures.push({ id: captureId, amount, description: pu.description ?? "Pago automático", createdAt: new Date() });
+    const answer = { id: sim("ORDER"), status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: captureId, status: "COMPLETED", custom_id: pu.custom_id, seller_receivable_breakdown: breakdown(amount) }] } }] };
+    vaultCharges.set(requestId || captureId, answer);
+    res.status(201).json(answer);
+  });
+  r.delete("/v3/vault/payment-tokens/:id", (req, res) => {
+    vaults.delete(req.params.id);
+    res.status(204).end();
+  });
   r.post("/v2/checkout/orders", (req, res) => {
     const pu = req.body.purchase_units?.[0] ?? {};
     const ctx = req.body.payment_source?.paypal?.experience_context ?? {};
@@ -89,6 +111,7 @@ export function fakePayPal(webBase: string): Router {
       returnUrl: ctx.return_url ?? "",
       cancelUrl: ctx.cancel_url ?? "",
       status: "CREATED",
+      vault: !!req.body.payment_source?.paypal?.attributes?.vault,
     };
     orders.set(o.id, o);
     res.status(201).json({ id: o.id, status: "PAYER_ACTION_REQUIRED", links: [{ rel: "payer-action", href: `${webBase}/checkoutnow?token=${o.id}` }] });
@@ -104,6 +127,7 @@ export function fakePayPal(webBase: string): Router {
         "PayPal (simulado)",
         `<div class="card"><p class="muted">${o.description}</p><div class="amount">$${o.amount} USD</div>
 <p class="muted">${auth ? "Se autoriza el monto, pero no se cobra hasta que te acepten." : "Pagar con tu cuenta PayPal."}</p>
+${o.vault ? `<p class="muted"><b>Guardar PayPal para pagos automáticos.</b> Autorizas a Ayni a cobrar tus próximos aportes de este pasanaku. Puedes quitarlo cuando quieras.</p>` : ""}
 <a class="btn pay" href="${webBase}/checkoutnow/approve?token=${o.id}">${auth ? "Autorizar depósito" : "Pagar ahora"}</a>
 <a class="btn cancel" href="${addQuery(o.cancelUrl, { token: o.id })}">Cancelar</a></div>`
       )
@@ -123,7 +147,14 @@ export function fakePayPal(webBase: string): Router {
     o.status = "COMPLETED";
     o.captureId = sim("CAPTURE");
     captures.push({ id: o.captureId, amount: o.amount, description: o.description, createdAt: new Date() });
-    res.status(201).json({ id: o.id, status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: o.captureId, status: "COMPLETED", custom_id: o.customId, seller_receivable_breakdown: breakdown(o.amount) }] } }] });
+    const vaultId = o.vault ? sim("VAULT") : undefined;
+    if (vaultId) vaults.add(vaultId);
+    res.status(201).json({
+      id: o.id,
+      status: "COMPLETED",
+      purchase_units: [{ payments: { captures: [{ id: o.captureId, status: "COMPLETED", custom_id: o.customId, seller_receivable_breakdown: breakdown(o.amount) }] } }],
+      ...(vaultId ? { payment_source: { paypal: { attributes: { vault: { id: vaultId, status: "VAULTED" } } } } } : {}),
+    });
   });
   r.post("/v2/checkout/orders/:id/authorize", (req, res) => {
     const o = orders.get(req.params.id);

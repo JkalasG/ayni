@@ -17,7 +17,11 @@ import { pathToFileURL } from "url";
 let PORT = 0; // a free port is picked at start
 let n = 0;
 const id = (p: string) => `${p}-${++n}`;
-const orders = new Map<string, { intent: string; amount: string; customId: string }>();
+const orders = new Map<string, { intent: string; amount: string; customId: string; vault?: boolean }>();
+const vaults = new Set<string>(); // payment methods members saved
+const vaultCharges = new Map<string, unknown>(); // by PayPal-Request-Id: the same request never charges twice
+let failNextVaultCharge = false;
+let loseNextVaultResponse = false;
 const captures: { id: string; amount: number; source: string }[] = [];
 const payouts: { batch: string; email: string; amount: number; type: string; senderItemId: string }[] = [];
 const voids: string[] = [];
@@ -43,10 +47,42 @@ const server = http.createServer((req, res) => {
     };
     let m: RegExpMatchArray | null;
     if (u === "/v1/oauth2/token") return send(200, { access_token: "tok", expires_in: 3600 });
+    if (u === "/v2/checkout/orders" && req.method === "POST" && j.payment_source?.paypal?.vault_id) {
+      // Merchant-initiated charge of a saved method: created and captured in one call.
+      const requestId = String(req.headers["paypal-request-id"] ?? "");
+      assert.ok(requestId, "automatic charges always carry an idempotency key");
+      if (vaultCharges.has(requestId)) return send(201, vaultCharges.get(requestId));
+      if (!vaults.has(j.payment_source.paypal.vault_id)) return send(422, { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "PAYMENT_SOURCE_INFO_CANNOT_BE_VERIFIED" }] });
+      if (failNextVaultCharge) {
+        failNextVaultCharge = false;
+        return send(422, { name: "UNPROCESSABLE_ENTITY", details: [{ issue: "INSTRUMENT_DECLINED" }] });
+      }
+      const pu = j.purchase_units[0];
+      const oid = id("ORD");
+      const cid = id("CAP");
+      const gross = Math.round(Number(pu.amount.value) * 100);
+      const usd = (c: number) => ({ currency_code: "USD", value: (c / 100).toFixed(2) });
+      captures.push({ id: cid, amount: gross, source: "order" });
+      const answer = {
+        id: oid,
+        status: "COMPLETED",
+        purchase_units: [{ payments: { captures: [{ id: cid, custom_id: pu.custom_id, seller_receivable_breakdown: { gross_amount: usd(gross), paypal_fee: usd(FEE_CENTS), net_amount: usd(gross - FEE_CENTS) } }] } }],
+      };
+      vaultCharges.set(requestId, answer);
+      if (loseNextVaultResponse) {
+        loseNextVaultResponse = false;
+        return send(503, { name: "SERVICE_UNAVAILABLE" });
+      }
+      return send(201, answer);
+    }
+    if ((m = u.match(/^\/v3\/vault\/payment-tokens\/([^/]+)$/)) && req.method === "DELETE") {
+      vaults.delete(m[1]);
+      return send(204);
+    }
     if (u === "/v2/checkout/orders" && req.method === "POST") {
       const oid = id("ORD");
       const pu = j.purchase_units[0];
-      orders.set(oid, { intent: j.intent, amount: pu.amount.value, customId: pu.custom_id });
+      orders.set(oid, { intent: j.intent, amount: pu.amount.value, customId: pu.custom_id, vault: !!j.payment_source?.paypal?.attributes?.vault });
       return send(201, { id: oid, links: [{ rel: "payer-action", href: `https://sandbox.paypal/approve/${oid}` }] });
     }
     if ((m = u.match(/^\/v2\/checkout\/orders\/([^/]+)\/capture$/))) {
@@ -56,7 +92,14 @@ const server = http.createServer((req, res) => {
       const gross = Math.round(Number(o.amount) * 100);
       const usd = (c: number) => ({ currency_code: "USD", value: (c / 100).toFixed(2) });
       const seller_receivable_breakdown = { gross_amount: usd(gross), paypal_fee: usd(FEE_CENTS), net_amount: usd(gross - FEE_CENTS) };
-      return send(201, { status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: cid, custom_id: o.customId, seller_receivable_breakdown }] } }] });
+      // The buyer agreed to save their PayPal in this checkout: PayPal answers with the vault token.
+      const vaultId = o.vault ? id("VAULT") : undefined;
+      if (vaultId) vaults.add(vaultId);
+      return send(201, {
+        status: "COMPLETED",
+        purchase_units: [{ payments: { captures: [{ id: cid, custom_id: o.customId, seller_receivable_breakdown }] } }],
+        ...(vaultId ? { payment_source: { paypal: { attributes: { vault: { id: vaultId, status: "VAULTED" } } } } } : {}),
+      });
     }
     if ((m = u.match(/^\/v2\/checkout\/orders\/([^/]+)\/authorize$/))) {
       const o = orders.get(m[1])!;
@@ -170,6 +213,7 @@ async function main() {
   const chatSvc = await import(`${B}/src/services/chat`);
   const webhooks = await import(`${B}/src/services/webhooks`);
   const refundSvc = await import(`${B}/src/services/refunds`);
+  const autopay = await import(`${B}/src/services/autopay`);
 
   // ------------------------------------------------ security: redirect allow-list
   assert.equal(auth.isAllowedRedirect("http://localhost:8081/groups/x"), true);
@@ -570,6 +614,136 @@ async function main() {
   await assert.rejects(refundSvc.retryRefund(wara, failedRefund.id), /not_failed/);
   assert.equal(refunds.filter((r) => r.capture === failedRefund.captureId).length, 1);
   console.log("✔ cancel before start: deposits refunded once, holds released, failed refund retried");
+
+  // ------------------------------------------------ automatic payment with a saved PayPal (vault)
+  {
+    const auto = await groups.createGroup(wara, { name: "Pasanaku automático", contributionCents: 2500, frequency: "WEEKLY", orderMethod: "LOTTERY", maxMembers: 4, lateFeePct: 5, maxRetentionPct: 0, demoMode: true, demoRoundMinutes: 4 });
+    for (const u of [rosa, juan, efrain]) await groups.joinGroup(u, auto.inviteCode);
+    await groups.setTurnOrder(wara, auto.id);
+    await groups.startGroup(wara, auto.id);
+    const back = `http://localhost:8081/groups/${auto.id}`;
+    const mine = (u: any, n: number) => db.contribution.findFirstOrThrow({ where: { membership: { userId: u.id, groupId: auto.id }, round: { number: n } } });
+    const round = (n: number) => db.round.findFirstOrThrow({ where: { groupId: auto.id, number: n } });
+    const payManually = async (u: any, n: number, save = false) => {
+      const c = await mine(u, n);
+      await payments.startCheckout(u, c.id, back, false, save);
+      await payments.completeContribution((await db.contribution.findUniqueOrThrow({ where: { id: c.id } })).paypalOrderId);
+    };
+    const release = async (n: number) => {
+      await engine.tickGroup(auto.id);
+      const a = await db.pendingAction.findFirstOrThrow({ where: { groupId: auto.id, type: "RELEASE_POT", status: "PENDING" } });
+      await actions.resolveAction(wara, a.id, true);
+      assert.equal((await round(n)).status, "PAID_OUT");
+    };
+    const before = (r: { dueAt: Date }, seconds: number) => new Date(r.dueAt.getTime() - seconds * 1000);
+    const notices = (u: any, title: string) => db.notification.count({ where: { userId: u.id, groupId: auto.id, title } });
+    const membership = (u: any) => db.membership.findUniqueOrThrow({ where: { userId_groupId: { userId: u.id, groupId: auto.id } } });
+
+    // Without a saved method it cannot be turned on.
+    await assert.rejects(autopay.setAutoPay(juan, auto.id, true), /no_saved_method/);
+    // Round 1: Juan pays and asks PayPal to save his method. Rosa pays normally: nothing is saved for her.
+    await payManually(juan, 1, true);
+    await payManually(rosa, 1);
+    await payManually(efrain, 1);
+    await payManually(wara, 1);
+    const juanNow = await db.user.findUniqueOrThrow({ where: { id: juan.id } });
+    assert.ok(juanNow.paypalVaultId && vaults.has(juanNow.paypalVaultId));
+    assert.equal((await membership(juan)).autoPay, true);
+    assert.equal((await db.user.findUniqueOrThrow({ where: { id: rosa.id } })).paypalVaultId, null);
+    assert.equal((await membership(rosa)).autoPay, false);
+    // Other members cannot see who pays automatically; the API never returns the token.
+    const asRosa = await groups.groupDetail(rosa, auto.id);
+    assert.ok(asRosa.memberships.every((m: any) => m.autoPay === false) && asRosa.hasSavedMethod === false);
+    const asJuan = await groups.groupDetail(juanNow, auto.id);
+    assert.ok(asJuan.autoPay === true && asJuan.hasSavedMethod === true);
+    await release(1);
+
+    // Round 2 (demo: lead = 2 min). First a notice, later the charge. Never the other way round.
+    const r2 = await round(2);
+    const capturesStart = captures.length;
+    await engine.tickGroup(auto.id, before(r2, 200)); // too early
+    assert.equal(await notices(juan, "Pago automático: aviso"), 0);
+    await engine.tickGroup(auto.id, before(r2, 110)); // inside the window: tell him
+    await engine.tickGroup(auto.id, before(r2, 105));
+    assert.equal(await notices(juan, "Pago automático: aviso"), 1, "told once");
+    assert.equal((await mine(juan, 2)).status, "PENDING");
+    assert.equal(captures.length, capturesStart, "the notice never charges");
+    await engine.tickGroup(auto.id, before(r2, 50)); // second half of the window: charge
+    await engine.tickGroup(auto.id, before(r2, 45));
+    const paid2 = await mine(juan, 2);
+    assert.equal(paid2.status, "PAID");
+    assert.ok(paid2.paypalCaptureId && paid2.paypalFeeCents === FEE_CENTS && paid2.lateFeeCents === 0);
+    assert.equal(captures.length, capturesStart + 1, "charged exactly once");
+    assert.equal(await notices(juan, "Aporte cobrado"), 1);
+    assert.equal((await mine(rosa, 2)).status, "PENDING", "members without automatic payment are never charged");
+    for (const u of [rosa, efrain, wara]) await payManually(u, 2);
+    await release(2);
+
+    // Round 3: PayPal charges but the answer is lost. The retry uses the same key: still one charge.
+    const r3 = await round(3);
+    await engine.tickGroup(auto.id, before(r3, 110));
+    loseNextVaultResponse = true;
+    const before3 = captures.length;
+    await engine.tickGroup(auto.id, before(r3, 50));
+    assert.equal((await mine(juan, 3)).status, "PENDING");
+    await engine.tickGroup(auto.id, before(r3, 40));
+    assert.equal((await mine(juan, 3)).status, "PAID");
+    assert.equal(captures.length, before3 + 1, "the lost answer did not become a second charge");
+    for (const u of [rosa, efrain, wara]) await payManually(u, 3);
+    await release(3);
+
+    // Round 4: PayPal declines. He is told, it is not tried again, and he pays by hand.
+    const r4 = await round(4);
+    await engine.tickGroup(auto.id, before(r4, 110));
+    failNextVaultCharge = true;
+    const before4 = captures.length;
+    await engine.tickGroup(auto.id, before(r4, 50));
+    await engine.tickGroup(auto.id, before(r4, 40));
+    assert.equal((await mine(juan, 4)).status, "PENDING");
+    assert.equal(captures.length, before4);
+    assert.equal(await db.notification.count({ where: { userId: juan.id, groupId: auto.id, body: { contains: "No pudimos cobrar" } } }), 1);
+    await payManually(juan, 4);
+    // A second capture for a contribution that is already paid (an old order approved late) is refunded at once.
+    const paid4 = await mine(juan, 4);
+    const refundsBeforeDup = refunds.length;
+    const stray = { event_type: "PAYMENT.CAPTURE.COMPLETED", resource: { id: "CAP-STRAY-1", custom_id: paid4.id, amount: { value: "25.00" }, supplementary_data: { related_ids: { order_id: "ORD-STRAY-1" } } } };
+    await webhooks.handleWebhook(stray);
+    await webhooks.handleWebhook(stray);
+    assert.equal(refunds.length, refundsBeforeDup + 1, "refunded once");
+    assert.equal(refunds.at(-1)!.capture, "CAP-STRAY-1");
+    assert.equal((await mine(juan, 4)).paypalCaptureId, paid4.paypalCaptureId, "the original payment stays");
+    assert.equal(await notices(juan, "Cobro duplicado devuelto"), 1);
+    // A capture smaller than the contribution is never accepted as its payment.
+    const rosa4 = await mine(rosa, 4);
+    await webhooks.handleWebhook({ event_type: "PAYMENT.CAPTURE.COMPLETED", resource: { id: "CAP-SMALL", custom_id: rosa4.id, amount: { value: "1.00" } } });
+    assert.equal((await mine(rosa, 4)).status, "PENDING");
+
+    // Turning it off after the notice stops the charge; removing the method deletes it at PayPal.
+    const two = await groups.createGroup(juanNow, { name: "Otro automático", contributionCents: 1000, frequency: "WEEKLY", orderMethod: "LOTTERY", maxMembers: 2, lateFeePct: 5, maxRetentionPct: 0, demoMode: true, demoRoundMinutes: 4 });
+    await groups.joinGroup(rosa, two.inviteCode);
+    await groups.setTurnOrder(juanNow, two.id);
+    await groups.startGroup(juanNow, two.id);
+    await autopay.setAutoPay(juanNow, two.id, true); // he already has a saved method: one tap, no checkout
+    const t1 = await db.round.findFirstOrThrow({ where: { groupId: two.id, number: 1 } });
+    await engine.tickGroup(two.id, before(t1, 110));
+    assert.equal(await db.notification.count({ where: { userId: juan.id, groupId: two.id, title: "Pago automático: aviso" } }), 1);
+    await autopay.setAutoPay(juanNow, two.id, false);
+    const beforeOff = captures.length;
+    await engine.tickGroup(two.id, before(t1, 50));
+    assert.equal(captures.length, beforeOff, "switched off after the notice: not charged");
+    const token = juanNow.paypalVaultId;
+    await autopay.removeSavedMethod(juanNow);
+    assert.equal(vaults.has(token), false, "deleted at PayPal too");
+    assert.equal((await db.user.findUniqueOrThrow({ where: { id: juan.id } })).paypalVaultId, null);
+    assert.equal(await db.membership.count({ where: { userId: juan.id, autoPay: true } }), 0);
+    // If the member removes Ayni inside PayPal, the webhook switches everything off as well.
+    await db.user.update({ where: { id: rosa.id }, data: { paypalVaultId: "VAULT-GONE" } });
+    await db.membership.updateMany({ where: { userId: rosa.id, groupId: two.id }, data: { autoPay: true } });
+    await webhooks.handleWebhook({ event_type: "VAULT.PAYMENT-TOKEN.DELETED", resource: { id: "VAULT-GONE" } });
+    assert.equal((await db.user.findUniqueOrThrow({ where: { id: rosa.id } })).paypalVaultId, null);
+    assert.equal(await db.membership.count({ where: { userId: rosa.id, autoPay: true } }), 0);
+    console.log("✔ automatic payment: notice before charge, charged once, lost answer, decline, duplicate refunded, switch off");
+  }
 
   // ------------------------------------------------ group chat
   // PayPal events are cards with data (the app translates them), never free text with private details.

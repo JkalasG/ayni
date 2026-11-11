@@ -91,6 +91,8 @@ type Group = {
   payouts: PPPayout[];
   paypalMode: "live" | "mock";
   unreadChat: number;
+  autoPay: boolean;
+  hasSavedMethod: boolean;
 };
 
 const statusColor = (c: Palette, s: Group["status"]) =>
@@ -104,6 +106,7 @@ const ERRORS: Record<string, Key> = {
   paypal_error: "err_paypal_error",
   organizer_only: "err_organizer_only",
   platform_balance_low: "err_platform_balance_low",
+  no_saved_method: "err_no_saved_method",
 };
 
 /** The pot is the treasure: a solid gold block with dark ink, 10:1 contrast in both modes. */
@@ -129,6 +132,7 @@ export default function GroupScreen() {
   const [confetti, setConfetti] = useState(0);
   const [pot, setPot] = useState<{ round: Round; streak: number | null } | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [saveMethod, setSaveMethod] = useState(false);
   const lastMine = useRef<string | null>(null);
   const load = useCallback(async () => {
     setG(await api<Group>(`/groups/${id}`));
@@ -216,7 +220,7 @@ export default function GroupScreen() {
 
   const pay = () =>
     run("pay", async () => {
-      const r = await payContribution(myContribution!.id, g.id);
+      const r = await payContribution(myContribution!.id, g.id, saveMethod && !g.hasSavedMethod);
       if (r === "paid") {
         setBanner({ text: t("paymentOk"), tone: "ok" });
         celebratePayment();
@@ -364,6 +368,24 @@ export default function GroupScreen() {
           onPress={pay}
         />
       )}
+      {/* Offer to save the PayPal only while paying, and only when there is none saved yet. */}
+      {mustPay && !g.hasSavedMethod && (
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: saveMethod }}
+          accessibilityHint={t("apSaveHint")}
+          onPress={() => setSaveMethod((v) => !v)}
+          style={{ flexDirection: "row", gap: 12, alignItems: "flex-start", minHeight: 44 }}
+        >
+          <View style={{ width: 24, height: 24, borderWidth: 2, borderColor: saveMethod ? c.fucsia.fill : c.muted, backgroundColor: saveMethod ? c.fucsia.fill : "transparent", alignItems: "center", justifyContent: "center", marginTop: 2 }}>
+            {saveMethod ? <Icon name="aprobar" size={14} color={c.onAction} /> : null}
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, lineHeight: 21, color: c.ink }}>{t("apSave")}</Text>
+            <Text style={{ fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.muted }}>{t("apSaveHint")}</Text>
+          </View>
+        </Pressable>
+      )}
       {mustPay && <Text style={{ fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.muted }}>{t("ppSecure")}</Text>}
       {!mustPay && mine?.turn != null && (
         <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>
@@ -371,6 +393,40 @@ export default function GroupScreen() {
           {mine.retentionHeldCents > 0 ? `, ${money(mine.retentionHeldCents)} ${t("held")}` : ""}
         </Text>
       )}
+    </SteppedBox>
+  );
+
+  /** Automatic payment: one clear state, one button to change it, and a way to remove the saved PayPal. */
+  const autoPayCard = g.status === "ACTIVE" && g.hasSavedMethod && (
+    <SteppedBox fill={c.surface} stroke={g.autoPay ? c.verde.fill : c.line} step={5} style={{ padding: space(4), gap: space(3) }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Icon name="paypal" size={18} color={g.autoPay ? c.verde.text : c.muted} />
+        <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 16, color: c.ink }}>
+          {t("apTitle")}
+        </Text>
+      </View>
+      <P muted>{g.autoPay ? t("apOn") : t("apOff")}</P>
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        <Button
+          compact
+          kind={g.autoPay ? "secondary" : "primary"}
+          title={g.autoPay ? t("apTurnOff") : t("apTurnOn")}
+          loading={busy === "autopay"}
+          onPress={() => run("autopay", () => api(`/groups/${g.id}/autopay`, { body: { enabled: !g.autoPay } }))}
+        />
+        <Button
+          compact
+          kind="ghost"
+          title={t("apRemove")}
+          loading={busy === "removepm"}
+          onPress={() =>
+            run("removepm", async () => {
+              await api("/me/payment-method", { method: "DELETE" });
+              setBanner({ text: t("apRemoved"), tone: "ok" });
+            })
+          }
+        />
+      </View>
     </SteppedBox>
   );
 
@@ -640,6 +696,7 @@ export default function GroupScreen() {
               </View>
               <View style={{ width: 380, gap: space(6) }}>
                 {payPanel}
+                {autoPayCard}
                 {decisions}
                 {failed}
                 {failedRefunds}
@@ -670,6 +727,7 @@ export default function GroupScreen() {
         {decisions}
         {weave}
         {!mustPay && payPanel}
+        {autoPayCard}
         {failed}
         {failedRefunds}
         {paypalPanel}

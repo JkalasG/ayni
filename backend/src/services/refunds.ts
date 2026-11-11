@@ -80,7 +80,7 @@ async function sendRefund(refundId: string): Promise<boolean> {
       captureId: r.captureId,
       // Same key while the outcome is unknown; a new one only after PayPal definitely said no.
       requestId: `refund-${r.id}-${r.attempts}`,
-      note: "Ayni: el pasanaku se canceló antes de empezar.",
+      note: r.reason === "DUPLICATE_CHARGE" ? "Ayni: este aporte ya estaba pagado." : "Ayni: el pasanaku se canceló antes de empezar.",
     });
     await db.refund.update({ where: { id: r.id }, data: { status: "COMPLETED", paypalRefundId: res.id } });
     return true;
@@ -105,7 +105,7 @@ async function sendRefund(refundId: string): Promise<boolean> {
 
 /** Engine: refunds whose outcome we never learned (timeout, 5xx). */
 export async function retryPendingRefunds() {
-  const stale = await db.refund.findMany({ where: { status: "PENDING", reason: "GROUP_CANCELLED", createdAt: { lte: new Date(Date.now() - 60_000) } }, take: 20 });
+  const stale = await db.refund.findMany({ where: { status: "PENDING", reason: { in: ["GROUP_CANCELLED", "DUPLICATE_CHARGE"] }, createdAt: { lte: new Date(Date.now() - 60_000) } }, take: 20 });
   for (const r of stale) await sendRefund(r.id);
 }
 
@@ -130,7 +130,7 @@ export async function onCaptureRefunded(resource: any, reason: "PAYPAL_REFUND" |
   const captureId = captureIdOfRefund(resource);
   if (!paypalRefundId || !captureId) return;
 
-  const ours = await db.refund.findFirst({ where: { OR: [{ paypalRefundId }, { captureId, reason: "GROUP_CANCELLED" }] } });
+  const ours = await db.refund.findFirst({ where: { OR: [{ paypalRefundId }, { captureId, reason: { in: ["GROUP_CANCELLED", "DUPLICATE_CHARGE"] } }] } });
   if (ours) {
     if (ours.status !== "COMPLETED" || !ours.paypalRefundId)
       await db.refund.update({ where: { id: ours.id }, data: { status: "COMPLETED", paypalRefundId: ours.paypalRefundId ?? paypalRefundId } }).catch(() => undefined);

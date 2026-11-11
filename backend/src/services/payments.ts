@@ -13,7 +13,7 @@ import { HttpError } from "./errors";
 import { notify, postToGroupChat } from "./notify";
 
 /** Member wants to pay their contribution: create a PayPal order and return the approval URL. */
-export async function startCheckout(user: User, contributionId: string, appRedirect: string, popup = false) {
+export async function startCheckout(user: User, contributionId: string, appRedirect: string, popup = false, saveMethod = false) {
   if (!isAllowedRedirect(appRedirect)) throw new HttpError(400, "redirect_not_allowed");
   const c = await db.contribution.findUnique({
     where: { id: contributionId },
@@ -35,9 +35,11 @@ export async function startCheckout(user: User, contributionId: string, appRedir
     returnUrl: `${config.publicApiUrl}/paypal/return?state=${encodeURIComponent(state)}`,
     cancelUrl: appendQuery(appRedirect, { status: "cancelled" }),
     locale: user.locale,
-    popup,
+    // Saving a method needs PayPal's own page (it shows the agreement), so never the popup.
+    popup: popup && !saveMethod,
+    vault: saveMethod,
   });
-  await db.contribution.update({ where: { id: c.id }, data: { paypalOrderId: order.id } });
+  await db.contribution.update({ where: { id: c.id }, data: { paypalOrderId: order.id, saveMethod } });
   return { approveUrl: order.approveUrl, orderId: order.id, amountCents: c.amountCents + fee, lateFeeCents: fee };
 }
 
@@ -61,11 +63,13 @@ export async function completeContribution(orderId: string) {
 
   let captureId: string | undefined;
   let fee: { paypalFeeCents?: number; paypalNetCents?: number } = {};
+  let vaultId: string | undefined;
   try {
     const cap = await paypal.captureOrder(orderId);
     if (cap.status !== "COMPLETED") throw new HttpError(402, `capture_${cap.status}`);
     captureId = cap.captureId;
     fee = { paypalFeeCents: cap.feeCents, paypalNetCents: cap.netCents };
+    vaultId = cap.vaultId;
   } catch (e) {
     // Already captured (e.g. the webhook won the race): confirm with PayPal instead of failing.
     const order = await paypal.getOrder(orderId);
@@ -81,6 +85,12 @@ export async function completeContribution(orderId: string) {
     await postToGroupChat(c.round.groupId, `${c.membership.user.name} pagó su aporte de la ronda ${c.round.number}.`, { type: "paid", name: c.membership.user.name, round: c.round.number });
     await settleInvoice(c.paypalInvoiceId);
     await maybeReleaseRetention(c.membershipId);
+  }
+  // The member asked to save their PayPal in this checkout and PayPal confirmed it: automatic payment is on.
+  if (vaultId && c.saveMethod) {
+    const { rememberVault } = await import("./autopay");
+    await rememberVault(c.membership.userId, c.membershipId, vaultId);
+    await notify(c.membership.userId, c.round.groupId, "action", "Pago automático activado", `Desde la próxima ronda PayPal cobrará tu aporte de ${c.round.group.name} automáticamente. Te avisaremos antes de cada cobro y puedes desactivarlo cuando quieras.`);
   }
   return c;
 }

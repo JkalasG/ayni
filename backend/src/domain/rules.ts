@@ -273,6 +273,23 @@ export function reminderStage(now: Date, dueAt: Date, graceMs: number, leadMs: n
 export const STAGE_ORDER: ReminderStage[] = ["none", "friendly", "due", "firm", "final"];
 
 /**
+ * Automatic payment, step by step. The member is always told BEFORE being charged:
+ *  - "wait":   too early, or told and the waiting time has not passed
+ *  - "notify": inside the lead window and not told yet -> tell them now
+ *  - "charge": told at least a quarter of the lead window ago, and we are in the second half of it
+ *  - "skip":   the due date passed: never charge automatically (a late fee applies; they pay it themselves)
+ * With a 24 h lead: notice 24 h before the due date, charge 12 h before.
+ */
+export function autoPayStep(now: Date, dueAt: Date, leadMs: number, noticeAt: Date | null): "wait" | "notify" | "charge" | "skip" {
+  const t = now.getTime();
+  const due = dueAt.getTime();
+  if (t >= due) return "skip";
+  if (t < due - leadMs) return "wait";
+  if (!noticeAt) return "notify";
+  return t >= Math.max(due - leadMs / 2, noticeAt.getTime() + leadMs / 4) ? "charge" : "wait";
+}
+
+/**
  * Money in AI-written text is always put by the code, never by the model.
  * The model writes {amount} (and optionally {fee}); any digit it writes itself
  * means it may have invented a number, so the text is discarded (null).

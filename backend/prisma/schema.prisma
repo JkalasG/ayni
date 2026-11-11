@@ -95,6 +95,8 @@ model User {
   // it always points to the account that logged in, even if the person changes their email.
   paypalPayerId  String?
   email          String // PayPal email: where payouts are sent when there is no payer id
+  // PayPal vault token: a payment method the member chose to save, used for automatic contributions.
+  paypalVaultId  String?
   name           String
   locale         String        @default("es")
   country        String? // ISO 3166-1 alpha-2, where the person lives (pasanakus across countries)
@@ -160,6 +162,7 @@ model Membership {
   isNewcomer         Boolean        @default(false) // admitted to an open group with no Ayni history
   depositCaptureId   String? // admission deposit, used as their round-1 contribution
   chatReadAt         DateTime? // last time they opened the group chat (unread counter)
+  autoPay            Boolean        @default(false) // charge each round with the member's saved PayPal method
   joinedAt           DateTime       @default(now())
   contributions      Contribution[]
   payouts            Payout[]
@@ -202,6 +205,9 @@ model Contribution {
   paidAt           DateTime?
   remindersSent    Int                @default(0)
   lastReminderAt   DateTime?
+  saveMethod         Boolean   @default(false) // the member asked PayPal to save their method in this checkout
+  autoPayNoticeAt    DateTime? // when they were told the automatic charge is coming
+  autoPayAttemptedAt DateTime? // one automatic attempt per contribution
 
   @@unique([roundId, membershipId])
 }

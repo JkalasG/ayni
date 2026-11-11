@@ -14,6 +14,7 @@ import {
   newcomerRetentionPct,
   coverageFromGuarantee,
   fillAmounts,
+  autoPayStep,
   type TrustProfile,
 } from "./rules";
 
@@ -171,4 +172,26 @@ test("reminder stages escalate", () => {
   assert.equal(reminderStage(new Date("2026-11-10T13:00:00Z"), due, 48 * h, 24 * h), "due");
   assert.equal(reminderStage(new Date("2026-11-11T13:00:00Z"), due, 48 * h, 24 * h), "firm");
   assert.equal(reminderStage(new Date("2026-11-12T13:00:00Z"), due, 48 * h, 24 * h), "final");
+});
+
+test("automatic payment: the member is always told before being charged, and never charged late", () => {
+  const due = new Date("2026-11-20T12:00:00Z");
+  const h = 3600_000;
+  const lead = 24 * h;
+  const at = (hoursBeforeDue: number) => new Date(due.getTime() - hoursBeforeDue * h);
+  assert.equal(autoPayStep(at(30), due, lead, null), "wait"); // too early
+  assert.equal(autoPayStep(at(24), due, lead, null), "notify"); // 24 h before: tell them
+  assert.equal(autoPayStep(at(20), due, lead, at(24)), "wait"); // told, not yet time
+  assert.equal(autoPayStep(at(12), due, lead, at(24)), "charge"); // 12 h before: charge
+  assert.equal(autoPayStep(at(1), due, lead, at(24)), "charge");
+  // Never without a notice, however close the due date is.
+  assert.equal(autoPayStep(at(1), due, lead, null), "notify");
+  // Told late (they turned it on at the last minute): wait a quarter of the window before charging.
+  assert.equal(autoPayStep(at(10), due, lead, at(11)), "wait");
+  assert.equal(autoPayStep(at(5), due, lead, at(11)), "charge");
+  // Told so late that the waiting time ends after the due date: it is never charged automatically.
+  assert.equal(autoPayStep(at(0.5), due, lead, at(2)), "wait");
+  assert.equal(autoPayStep(at(0), due, lead, at(24)), "skip");
+  assert.equal(autoPayStep(at(-5), due, lead, at(24)), "skip");
+  assert.equal(autoPayStep(at(-5), due, lead, null), "skip");
 });
