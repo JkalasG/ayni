@@ -59,6 +59,16 @@ A member can give their **own** AI assistant (Claude or any MCP client) a read-o
 - **Group chat** between members, with cards for what happened (paid, pot sent…). The author or the organizer can hide a message; there is a rate limit and text sanitizing.
 - **Claims**: a member reports a problem with one of their contributions; the organizer refunds it or explains. If the member opens a PayPal dispute, it attaches to the same claim and PayPal's decision is written there.
 
+### Timelines with Bryntum Scheduler (web)
+
+Three screens of a circle use [Bryntum Scheduler](https://bryntum.com/products/scheduler/), one row per member:
+
+- **Turn timeline**: who receives the pot in which round. The organizer drags a turn onto another member to swap them (always with a confirmation, validated again by the server, only rounds that have not started; round dates never change). When someone falls behind, the assistant proposes a swap that the organizer approves or lets expire.
+- **Payment calendar**: each member's contribution to each round (paid, pending, late…), a star on whoever receives the pot. Read-only.
+- **Guarantee timeline**: when each guarantee was withheld from a pot, used, returned or refunded. A member sees only their own; the organizer sees everyone.
+
+Bryntum draws on the browser's DOM, so these are web only (the phone shows a notice and keeps the weave). The license key goes in `EXPO_PUBLIC_BRYNTUM_LICENSE` (never committed; see `app/.env.example`).
+
 ## Where PayPal is used
 
 | PayPal capability | Use in Ayni |
