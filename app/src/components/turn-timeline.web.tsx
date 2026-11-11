@@ -9,27 +9,9 @@
 import { createElement, useEffect, useRef } from "react";
 import { useWindowDimensions } from "react-native";
 import type { TimelineProps, TimelineRound } from "./turn-timeline-types";
+import { HOST_STYLE, esc, loadScheduler, presetFor } from "./bryntum-web";
 
-const ASSETS = "/bryntum";
 const COLORS: Record<TimelineRound["status"], string> = { UPCOMING: "gray", COLLECTING: "orange", READY: "lime", PAID_OUT: "green" };
-
-function loadCss(id: string, href: string): Promise<void> {
-  return new Promise((resolve) => {
-    let link = document.getElementById(id) as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement("link");
-      link.id = id;
-      link.rel = "stylesheet";
-      document.head.appendChild(link);
-    }
-    if (link.getAttribute("href") === href) return resolve();
-    link.onload = () => resolve();
-    link.onerror = () => resolve(); // a missing stylesheet must not leave the screen empty forever
-    link.setAttribute("href", href);
-  });
-}
-
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** Data the scheduler shows, from the group's real rounds. Members without a turn yet are left out. */
 function buildData(p: TimelineProps) {
@@ -61,16 +43,6 @@ function buildData(p: TimelineProps) {
   return { resources, events, startDate, endDate };
 }
 
-/** The time scale that fits the whole pasanaku: minutes in demo mode, weeks or months in real life. */
-function presetFor(startDate: Date, endDate: Date): string {
-  const span = endDate.getTime() - startDate.getTime();
-  const hour = 3600_000;
-  if (span <= 6 * hour) return "minuteAndHour";
-  if (span <= 4 * 24 * hour) return "hourAndDay";
-  if (span <= 30 * 24 * hour) return "dayAndWeek";
-  return "weekAndMonth";
-}
-
 export function TurnTimeline(props: TimelineProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const scheduler = useRef<any>(null);
@@ -84,16 +56,7 @@ export function TurnTimeline(props: TimelineProps) {
     (async () => {
       const el = host.current;
       if (!el) return;
-      await Promise.all([
-        loadCss("bryntum-core", `${ASSETS}/scheduler.css`),
-        loadCss("bryntum-fa", `${ASSETS}/fontawesome/css/fontawesome.css`),
-        loadCss("bryntum-fa-solid", `${ASSETS}/fontawesome/css/solid.css`),
-      ]);
-      await loadCss("bryntum-theme", `${ASSETS}/stockholm-${props.dark ? "dark" : "light"}.css`);
-      // The key must be registered before the library loads. It is public by nature (it ships in the page).
-      const key = process.env.EXPO_PUBLIC_BRYNTUM_LICENSE;
-      if (key) ((globalThis as any).bryntum ??= {}).licenseKey = key;
-      const { Scheduler } = await import("@bryntum/scheduler-enterprise");
+      const Scheduler = await loadScheduler(props.dark);
       if (disposed || !host.current) return;
 
       const data = buildData(latest.current);
@@ -183,6 +146,5 @@ export function TurnTimeline(props: TimelineProps) {
     scheduler.current?.refreshWithTransition?.();
   }, [width]);
 
-  // Bryntum's theme sets no font: use the app's, so the timeline does not look like another product.
-  return createElement("div", { ref: host, style: { width: "100%", fontFamily: "Figtree_400Regular, system-ui, sans-serif", fontSize: 15 } });
+  return createElement("div", { ref: host, style: HOST_STYLE });
 }
