@@ -14,6 +14,7 @@ import { coverWithRetention, retryUnknownPayouts, sendOverdueInvoice } from "./p
 import { retryPendingRefunds } from "./refunds";
 import { autoPayTick } from "./autopay";
 import { maybeReconcile } from "./reconcile";
+import { proposeRescheduleForLate } from "./reschedule";
 import { execute } from "./actions";
 import { notify, postToGroupChat } from "./notify";
 import { windows } from "./windows";
@@ -99,6 +100,8 @@ export async function tickGroup(groupId: string, now = new Date()) {
           });
         }
         await db.contribution.update({ where: { id: c.id }, data: { remindersSent: DONE } });
+        // Late for good and their own turn is still ahead: the assistant proposes swapping it (the organizer decides).
+        await proposeRescheduleForLate(groupId, c.membershipId, now).catch((e) => console.error("reschedule proposal failed", c.membershipId, e));
       }
     }
 
@@ -154,6 +157,11 @@ async function runExpired(groupId: string, now = new Date()) {
     orderBy: { createdAt: "asc" },
   });
   for (const a of expired) {
+    // A proposal that nothing depends on (a suggested turn swap) expires instead of applying itself.
+    if (a.type === "SWAP_TURNS" && (a.payload as any)?.noAuto) {
+      await db.pendingAction.updateMany({ where: { id: a.id, status: "PENDING" }, data: { status: "REJECTED", resolvedAt: new Date() } });
+      continue;
+    }
     try {
       await execute(a, "AUTO_EXECUTED");
     } catch (e) {

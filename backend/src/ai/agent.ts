@@ -275,6 +275,57 @@ export async function recommendAdmission(p: {
   }
 }
 
+// ------------------------------------------------------------------ rescheduling
+
+/**
+ * Why the assistant proposes moving a late member's turn later. Names only, never numbers: the code
+ * puts every number in the proposal, so a model can never invent a date or an amount.
+ * Falls back to a fixed sentence without a key, on any error, or if the text has a digit.
+ */
+export async function explainReschedule(p: { groupId: string; lateName: string; lateUserId: string; partnerName: string; locale: string }): Promise<string> {
+  const fallback =
+    p.locale === "en"
+      ? `${p.lateName} is behind on a payment and their turn comes first, while ${p.partnerName} is up to date. Swapping them protects the group; the round dates do not change.`
+      : `${p.lateName} se atrasó con un pago y su turno llega antes, mientras que ${p.partnerName} está al día. Cambiarlos protege al grupo; las fechas de las rondas no cambian.`;
+  const log = (source: "claude" | "fallback", output: string) =>
+    logAi({
+      groupId: p.groupId,
+      kind: "reschedule",
+      source,
+      subject: `Propuesta de cambio de turnos para ${p.lateName}`,
+      consulted: { lateMember: p.lateName, proposedPartner: p.partnerName, rule: "nearest later turn among members who are up to date" },
+      output,
+      // It is about one person's payments: only the organizer and that person see it.
+      audience: "organizer",
+      subjectUserId: p.lateUserId,
+    });
+  if (!client) {
+    await log("fallback", fallback);
+    return fallback;
+  }
+  try {
+    const msg = await client.messages.create({
+      model: MODEL,
+      max_tokens: 160,
+      system:
+        "You explain, in at most two short sentences and plain text, why a rotating savings group (pasanaku) should swap the turn of a member " +
+        "who is behind on a payment with the next member who is up to date. Be kind, neutral and concrete; never shame anyone. " +
+        "Mention that the round dates do not change. Do NOT write any digits or numbers. " +
+        `Write in ${langName(p.locale)}.`,
+      messages: [{ role: "user", content: `Late member: ${p.lateName}\nProposed partner: ${p.partnerName}` }],
+    });
+    const text = textOf(msg);
+    if (text && !/\d/.test(text)) {
+      await log("claude", text);
+      return text;
+    }
+  } catch (e) {
+    console.error("explainReschedule failed", e);
+  }
+  await log("fallback", fallback);
+  return fallback;
+}
+
 // ------------------------------------------------------------------ disputes
 
 export async function summarizeDisputes(

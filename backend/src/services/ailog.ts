@@ -1,6 +1,6 @@
 import { db } from "../db";
 
-export type AiLogKind = "chat" | "reminder" | "order" | "guarantee" | "admission" | "disputes";
+export type AiLogKind = "chat" | "reminder" | "order" | "guarantee" | "admission" | "disputes" | "reschedule";
 export type AiSource = "claude" | "fallback" | "rules";
 
 /**

@@ -230,6 +230,7 @@ async function main() {
   const refundSvc = await import(`${B}/src/services/refunds`);
   const autopay = await import(`${B}/src/services/autopay`);
   const recon = await import(`${B}/src/services/reconcile`);
+  const resched = await import(`${B}/src/services/reschedule`);
 
   // ------------------------------------------------ security: redirect allow-list
   assert.equal(auth.isAllowedRedirect("http://localhost:8081/groups/x"), true);
@@ -903,6 +904,81 @@ async function main() {
   assert.equal(blocked, 5);
   await chatSvc.sendMessage(wara, barrio.id, "sigo aquí");
   console.log("✔ group chat: members talk, assistant answers are private, moderation, unread, rate limit");
+
+  // ------------------------------------------------ turn timeline: organizer swaps turns; the assistant proposes a swap for a late member
+  {
+    const tg = await groups.createGroup(juan, { name: "Cronograma", contributionCents: 1000, frequency: "WEEKLY", orderMethod: "ORGANIZER", maxMembers: 5, lateFeePct: 5, maxRetentionPct: 0, demoMode: true, demoRoundMinutes: 4 });
+    for (const u of [rosa, marisol, efrain, wara]) await groups.joinGroup(u, tg.inviteCode);
+    const ms = await db.membership.findMany({ where: { groupId: tg.id }, include: { user: true } });
+    const byUser = (u: any) => ms.find((m: any) => m.userId === u.id)!;
+    const order = [juan, rosa, marisol, efrain, wara].map((u) => byUser(u).id);
+    await groups.setTurnOrder(juan, tg.id, order);
+    await groups.startGroup(juan, tg.id);
+    const roundOf = (n: number) => db.round.findFirstOrThrow({ where: { groupId: tg.id, number: n } });
+    const turnOf = async (u: any) => (await db.membership.findUniqueOrThrow({ where: { id: byUser(u).id } })).turn;
+    const dues = (await db.round.findMany({ where: { groupId: tg.id }, orderBy: { number: "asc" } })).map((r: any) => r.dueAt.getTime());
+    const [mJuan, mRosa, mMarisol, mEfrain, mWara] = [juan, rosa, marisol, efrain, wara].map((u) => byUser(u).id);
+
+    // The organizer swaps two upcoming turns: applied at once, due dates untouched, both told.
+    await assert.rejects(resched.swapTurnsAsOrganizer(rosa, tg.id, mMarisol, mEfrain), /organizer_only/);
+    await assert.rejects(resched.swapTurnsAsOrganizer(juan, tg.id, mMarisol, mMarisol), /same_member/);
+    await assert.rejects(resched.swapTurnsAsOrganizer(juan, tg.id, mJuan, mEfrain), /round_not_upcoming/, "round 1 is collecting: it cannot move");
+    await assert.rejects(resched.swapTurnsAsOrganizer(juan, tg.id, mMarisol, "nobody"), /member_not_found/);
+    await resched.swapTurnsAsOrganizer(juan, tg.id, mMarisol, mEfrain, "Marisol viaja en esas fechas");
+    assert.equal(await turnOf(marisol), 4);
+    assert.equal(await turnOf(efrain), 3);
+    assert.equal((await roundOf(3)).recipientId, mEfrain);
+    assert.equal((await roundOf(4)).recipientId, mMarisol);
+    assert.deepEqual((await db.round.findMany({ where: { groupId: tg.id }, orderBy: { number: "asc" } })).map((r: any) => r.dueAt.getTime()), dues, "the due dates never move");
+    assert.equal(await db.notification.count({ where: { userId: marisol.id, title: { startsWith: "Cambio de turno" } } }), 1);
+    assert.equal(await db.notification.count({ where: { userId: efrain.id, title: { startsWith: "Cambio de turno" } } }), 1);
+    assert.equal(await db.notification.count({ where: { userId: juan.id, title: { startsWith: "Cambio de turno" } } }), 0, "the organizer is not told about their own decision");
+    assert.ok(await db.aiLog.findFirst({ where: { groupId: tg.id, kind: "reschedule" } }));
+    // Undo it (swap back), then check nothing was left pending.
+    await resched.swapTurnsAsOrganizer(juan, tg.id, mMarisol, mEfrain);
+    assert.equal(await turnOf(marisol), 3);
+    assert.equal(await db.pendingAction.count({ where: { groupId: tg.id, type: "SWAP_TURNS", status: "PENDING" } }), 0);
+
+    // Round 1: everyone pays except Rosa (turn 2). Past the grace period the assistant proposes swapping her with Marisol (turn 3).
+    const payTg = async (u: any, n: number) => {
+      const c = await db.contribution.findFirstOrThrow({ where: { membership: { userId: u.id, groupId: tg.id }, round: { number: n } } });
+      await payments.startCheckout(u, c.id, `http://localhost:8081/groups/${tg.id}`);
+      await payments.completeContribution((await db.contribution.findUniqueOrThrow({ where: { id: c.id } })).paypalOrderId);
+    };
+    for (const u of [juan, marisol, efrain, wara]) await payTg(u, 1);
+    const r1 = await roundOf(1);
+    const final = new Date(r1.dueAt.getTime() + 3 * 60_000);
+    await engine.tickGroup(tg.id, final);
+    await engine.tickGroup(tg.id, final);
+    const proposals = await db.pendingAction.findMany({ where: { groupId: tg.id, type: "SWAP_TURNS", status: "PENDING" } });
+    assert.equal(proposals.length, 1, "proposed once, however many times the engine runs");
+    const prop = proposals[0];
+    assert.equal(prop.createdBy, "ai");
+    assert.deepEqual([(prop.payload as any).a, (prop.payload as any).b].sort(), [mRosa, mMarisol].sort());
+    assert.ok((prop.payload as any).noAuto === true);
+    assert.ok(!/\d/.test((prop.payload as any).reason), "the explanation never carries numbers");
+    assert.equal(await db.notification.count({ where: { userId: juan.id, title: "Propuesta de cambio de turnos" } }), 1);
+    const log = await db.aiLog.findFirstOrThrow({ where: { groupId: tg.id, kind: "reschedule", subjectUserId: rosa.id } });
+    assert.equal(log.audience, "organizer", "about one person's payments: only the organizer and that person");
+    assert.equal(await turnOf(rosa), 2, "nothing moved by itself");
+    // Silence does not apply it: it expires.
+    await db.pendingAction.update({ where: { id: prop.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    await engine.tickGroup(tg.id, new Date(final.getTime() + 1000));
+    assert.equal((await db.pendingAction.findUniqueOrThrow({ where: { id: prop.id } })).status, "REJECTED");
+    assert.equal(await turnOf(rosa), 2);
+    // A later proposal the organizer approves is applied; dates stay.
+    const again = await resched.proposeRescheduleForLate(tg.id, mRosa, final);
+    assert.ok(again);
+    assert.equal(await resched.proposeRescheduleForLate(tg.id, mRosa, final), null, "no duplicate while one is waiting");
+    await actions.resolveAction(juan, again.id, true);
+    assert.equal(await turnOf(rosa), 3);
+    assert.equal(await turnOf(marisol), 2);
+    assert.deepEqual((await db.round.findMany({ where: { groupId: tg.id }, orderBy: { number: "asc" } })).map((r: any) => r.dueAt.getTime()), dues);
+    // The last turn has nobody later to swap with; a member whose round is no longer ahead gets no proposal.
+    assert.equal(await resched.proposeRescheduleForLate(tg.id, mWara, final), null);
+    assert.equal(await resched.proposeRescheduleForLate(tg.id, mJuan, final), null, "their round is already collecting");
+    console.log("✔ turn timeline: organizer swaps, due dates fixed, assistant proposes for a late member, silence expires, approval applies");
+  }
 
   // ------------------------------------------------ daily reconciliation with PayPal Transaction Search
   {

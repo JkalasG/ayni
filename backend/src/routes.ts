@@ -35,6 +35,7 @@ import { cancelGroup, retryRefund } from "./services/refunds";
 import { removeSavedMethod, setAutoPay } from "./services/autopay";
 import { listClaims, openClaim, refundClaim, rejectClaim } from "./services/claims";
 import { groupReconciliation, reconcileNow } from "./services/reconcile";
+import { swapTurnsAsOrganizer } from "./services/reschedule";
 import { summarizeDisputes } from "./ai/agent";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
@@ -216,6 +217,14 @@ router.post(
   })
 );
 router.post("/groups/:id/start", ...authed(async (req, res) => res.json(await startGroup(req.user, req.params.id))));
+/** Organizer swaps the turns of two members of a running pasanaku (drag and drop on the timeline). */
+router.post(
+  "/groups/:id/swap",
+  ...authed(async (req, res) => {
+    const { a, b, reason } = z.object({ a: z.string().max(40), b: z.string().max(40), reason: z.string().max(200).optional() }).parse(req.body);
+    res.json(await swapTurnsAsOrganizer(req.user, req.params.id, a, b, reason));
+  })
+);
 /** Organizer cancels a pasanaku that has not started: deposits are refunded, holds released. */
 router.post("/groups/:id/cancel", ...authed(async (req, res) => res.json(await cancelGroup(req.user, req.params.id))));
 
