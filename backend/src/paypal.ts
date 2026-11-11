@@ -257,9 +257,16 @@ export async function listDisputes(max = 20): Promise<Dispute[]> {
 
 // ---------- Payouts v1: delivering the pot / releasing retention ----------
 
+/** Who receives a payout: the PayPal account that logged in when we know it, otherwise their email. */
+export type PayoutRecipient = { email: string; paypalPayerId?: string | null };
+
+export function payoutReceiver(to: PayoutRecipient): { recipient_type: "PAYPAL_ID" | "EMAIL"; receiver: string } {
+  return to.paypalPayerId ? { recipient_type: "PAYPAL_ID", receiver: to.paypalPayerId } : { recipient_type: "EMAIL", receiver: to.email };
+}
+
 export async function sendPayout(p: {
   senderBatchId: string; // our payout id, guarantees idempotency
-  email: string;
+  to: PayoutRecipient;
   amountCents: number;
   note: string;
   subject: string;
@@ -270,8 +277,7 @@ export async function sendPayout(p: {
       sender_batch_header: { sender_batch_id: p.senderBatchId, email_subject: p.subject },
       items: [
         {
-          recipient_type: "EMAIL",
-          receiver: p.email,
+          ...payoutReceiver(p.to),
           amount: { value: formatUSD(p.amountCents), currency: "USD" },
           note: p.note,
           sender_item_id: p.senderBatchId,
@@ -325,7 +331,7 @@ export async function exchangeLoginCode(code: string): Promise<string> {
   return ((await res.json()) as { access_token: string }).access_token;
 }
 
-export async function getUserInfo(userAccessToken: string): Promise<{ userId: string; name: string; email: string }> {
+export async function getUserInfo(userAccessToken: string): Promise<{ userId: string; payerId: string | null; name: string; email: string }> {
   const res = await fetch(`${apiBase}/v1/identity/oauth2/userinfo?schema=paypalv1.1`, {
     headers: { Authorization: `Bearer ${userAccessToken}` },
   });
@@ -333,7 +339,8 @@ export async function getUserInfo(userAccessToken: string): Promise<{ userId: st
   const u = (await res.json()) as any;
   const email = u.emails?.find((e: any) => e.primary)?.value ?? u.emails?.[0]?.value ?? u.email;
   if (!email) throw new PayPalError("userinfo", 400, "PayPal did not return an email. Enable the Email scope in the Developer Dashboard.");
-  return { userId: u.user_id ?? u.payer_id, name: u.name ?? email, email };
+  const payerId = typeof u.payer_id === "string" && /^[A-Z0-9]{8,20}$/.test(u.payer_id) ? u.payer_id : null;
+  return { userId: u.user_id ?? u.payer_id, payerId, name: u.name ?? email, email };
 }
 
 // ---------- Webhooks ----------

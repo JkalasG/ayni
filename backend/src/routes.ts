@@ -22,12 +22,13 @@ import {
   updateAdmission,
   HttpError,
 } from "./services/groups";
-import { captureForMember, completeContribution, completeInvoice, retryPayout, startCheckout } from "./services/payments";
+import { captureForMember, completeContribution, retryPayout, startCheckout } from "./services/payments";
 import { resolveAction } from "./services/actions";
 import { tickGroup } from "./services/engine";
 import { completeDeposit, exploreOpenGroups, myRequest, requestToJoin } from "./services/admission";
 import { trustProfile } from "./services/trust";
-import { groupDisputes, onDisputeCreated } from "./services/disputes";
+import { groupDisputes } from "./services/disputes";
+import { handleWebhook } from "./services/webhooks";
 import { groupLedger, myLedger } from "./services/ledger";
 import { summarizeDisputes } from "./ai/agent";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
@@ -60,8 +61,8 @@ router.get(
     const info = await paypal.getUserInfo(token);
     const user = await db.user.upsert({
       where: { paypalUserId: info.userId },
-      update: { email: info.email, name: info.name, paypalVerified: true },
-      create: { paypalUserId: info.userId, email: info.email, name: info.name, paypalVerified: true },
+      update: { email: info.email, name: info.name, paypalVerified: true, ...(info.payerId ? { paypalPayerId: info.payerId } : {}) },
+      create: { paypalUserId: info.userId, paypalPayerId: info.payerId, email: info.email, name: info.name, paypalVerified: true },
     });
     res.redirect(appendQuery(redirect, { token: issueToken(user.id) }));
   })
@@ -85,12 +86,15 @@ router.post(
 /** Countries Ayni groups can be based in: Latin America and the main destinations of its diaspora. */
 export const COUNTRIES = ["AR", "BO", "BR", "CL", "CO", "EC", "MX", "PE", "PY", "US", "ES", "IT"] as const;
 
-router.get("/me", ...authed(async (req, res) => res.json(req.user)));
+/** What the app may know about the signed-in person. PayPal account ids stay on the server. */
+const publicUser = ({ paypalUserId: _a, paypalPayerId: _b, pushToken: _c, ...u }: AuthedRequest["user"]) => u;
+
+router.get("/me", ...authed(async (req, res) => res.json(publicUser(req.user))));
 router.patch(
   "/me",
   ...authed(async (req, res) => {
     const data = z.object({ locale: z.enum(["es", "en"]).optional(), country: z.enum(COUNTRIES).nullable().optional() }).parse(req.body);
-    res.json(await db.user.update({ where: { id: req.user.id }, data }));
+    res.json(publicUser(await db.user.update({ where: { id: req.user.id }, data })));
   })
 );
 router.get("/me/profile", ...authed(async (req, res) => res.json(await trustProfile(req.user.id))));
@@ -309,43 +313,6 @@ router.post("/paypal/webhook", async (req, res) => {
     res.status(500).end();
   }
 });
-
-async function handleWebhook(event: any) {
-  {
-    switch (event.event_type) {
-      case "CHECKOUT.ORDER.APPROVED":
-        if (event.resource?.intent === "AUTHORIZE") await completeDeposit(event.resource.id).catch(() => undefined);
-        else await completeContribution(event.resource.id).catch(() => undefined);
-        break;
-      case "INVOICING.INVOICE.PAID": {
-        const inv = event.resource?.invoice ?? event.resource;
-        if (inv?.id) await completeInvoice(inv.id);
-        break;
-      }
-      case "CUSTOMER.DISPUTE.CREATED":
-        await onDisputeCreated(event.resource);
-        break;
-      case "PAYMENT.CAPTURE.COMPLETED": {
-        const orderId = event.resource?.supplementary_data?.related_ids?.order_id;
-        if (orderId) await completeContribution(orderId).catch(() => undefined);
-        break;
-      }
-      case "PAYMENT.PAYOUTS-ITEM.SUCCEEDED":
-      case "PAYMENT.PAYOUTS-ITEM.FAILED":
-      case "PAYMENT.PAYOUTS-ITEM.UNCLAIMED": {
-        const payoutId = event.resource?.payout_item?.sender_item_id;
-        const status = event.event_type.endsWith("SUCCEEDED") ? "SUCCEEDED" : "FAILED";
-        // States never go backwards: an out-of-order FAILED can't undo a SUCCEEDED.
-        if (payoutId)
-          await db.payout.updateMany({
-            where: { id: payoutId, status: { not: "SUCCEEDED" } },
-            data: { status, paypalItemId: event.resource.payout_item_id },
-          });
-        break;
-      }
-    }
-  }
-}
 
 // ---------------------------------------------------------------- chat + notifications
 

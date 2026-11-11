@@ -90,7 +90,10 @@ enum ActionStatus {
 model User {
   id             String        @id @default(cuid())
   paypalUserId   String        @unique
-  email          String // PayPal email: where payouts are sent
+  // PayPal account id (payer_id) from Log in with PayPal. Payouts go to it when we have it:
+  // it always points to the account that logged in, even if the person changes their email.
+  paypalPayerId  String?
+  email          String // PayPal email: where payouts are sent when there is no payer id
   name           String
   locale         String        @default("es")
   country        String? // ISO 3166-1 alpha-2, where the person lives (pasanakus across countries)

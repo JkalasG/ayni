@@ -169,7 +169,7 @@ export async function releasePot(roundId: string) {
     orderBy: { round: { number: "asc" } },
   });
   let available = pot - held;
-  const compensations: { contributionId: string; to: { id: string; email: string; name: string }; cents: number; round: number }[] = [];
+  const compensations: { contributionId: string; to: { id: string; user: paypal.PayoutRecipient }; cents: number; round: number }[] = [];
   for (const d of debts) {
     const shortfall = d.amountCents - d.recoveredCents - d.compensatedCents;
     if (shortfall <= 0 || available <= 0) continue;
@@ -177,7 +177,7 @@ export async function releasePot(roundId: string) {
     available -= cents;
     compensations.push({
       contributionId: d.id,
-      to: { id: d.round.recipientId, email: d.round.recipient.user.email, name: d.round.recipient.user.name },
+      to: { id: d.round.recipientId, user: d.round.recipient.user },
       cents,
       round: d.round.number,
     });
@@ -195,7 +195,7 @@ export async function releasePot(roundId: string) {
     });
     // A failed payout never freezes the group: it is recorded and the organizer can retry it.
     await sendRecordedPayout(payout.id, {
-      email: round.recipient.user.email,
+      to: round.recipient.user,
       subject: `Ayni: ¡recibiste el pozo de ${round.group.name}!`,
       note: `Ronda ${round.number}. Retenido como garantía: $${formatUSD(held)}, se te devuelve al completar tus aportes.`,
       organizerId: round.group.organizerId,
@@ -207,7 +207,7 @@ export async function releasePot(roundId: string) {
     await db.contribution.update({ where: { id: comp.contributionId }, data: { compensatedCents: { increment: comp.cents } } });
     const p = await db.payout.create({ data: { roundId, membershipId: comp.to.id, kind: "COMPENSATION", amountCents: comp.cents } });
     await sendRecordedPayout(p.id, {
-      email: comp.to.email,
+      to: comp.to.user,
       subject: `Ayni: completamos tu pozo de ${round.group.name}`,
       note: `En la ronda ${comp.round} faltó un aporte. Lo descontamos del pozo de quien no pagó.`,
       organizerId: round.group.organizerId,
@@ -232,12 +232,12 @@ export async function releasePot(roundId: string) {
 
 async function sendRecordedPayout(
   payoutId: string,
-  p: { email: string; subject: string; note: string; organizerId: string; groupId: string }
+  p: { to: paypal.PayoutRecipient; subject: string; note: string; organizerId: string; groupId: string }
 ): Promise<boolean> {
   const payout = await db.payout.findUniqueOrThrow({ where: { id: payoutId } });
   try {
     // sender_batch_id = our payout id: sending the same record twice can never pay twice.
-    const res = await paypal.sendPayout({ senderBatchId: payout.id, email: p.email, amountCents: payout.amountCents, subject: p.subject, note: p.note });
+    const res = await paypal.sendPayout({ senderBatchId: payout.id, to: p.to, amountCents: payout.amountCents, subject: p.subject, note: p.note });
     await db.payout.update({ where: { id: payout.id }, data: { status: "SENT", paypalBatchId: res.batchId } });
     return true;
   } catch (e) {
@@ -275,7 +275,7 @@ export async function retryUnknownPayouts() {
     const claim = await db.payout.updateMany({ where: { id: p.id, status: "UNKNOWN" }, data: { status: "PENDING" } });
     if (claim.count === 0) continue;
     const g = p.membership.group;
-    await sendRecordedPayout(p.id, { email: p.membership.user.email, ...payoutTexts(p.kind, g.name), organizerId: g.organizerId, groupId: g.id });
+    await sendRecordedPayout(p.id, { to: p.membership.user, ...payoutTexts(p.kind, g.name), organizerId: g.organizerId, groupId: g.id });
   }
 }
 
@@ -293,7 +293,7 @@ export async function retryPayout(user: User, payoutId: string) {
     // Maybe PayPal has it: re-send the SAME record, never a new one.
     const claim = await db.payout.updateMany({ where: { id: old.id, status: "UNKNOWN" }, data: { status: "PENDING" } });
     if (claim.count === 0) throw new HttpError(409, "already_retrying");
-    const ok = await sendRecordedPayout(old.id, { email: old.membership.user.email, ...payoutTexts(old.kind, g.name), organizerId: g.organizerId, groupId: g.id });
+    const ok = await sendRecordedPayout(old.id, { to: old.membership.user, ...payoutTexts(old.kind, g.name), organizerId: g.organizerId, groupId: g.id });
     return { ok };
   }
 
@@ -307,7 +307,7 @@ export async function retryPayout(user: User, payoutId: string) {
     throw new HttpError(409, "not_failed");
   }
   const ok = await sendRecordedPayout(fresh.id, {
-    email: old.membership.user.email,
+    to: old.membership.user,
     ...payoutTexts(old.kind, g.name),
     organizerId: g.organizerId,
     groupId: g.id,
@@ -348,7 +348,7 @@ async function releaseRetention(membershipId: string) {
   if (claim.count === 0) return;
   const payout = await db.payout.create({ data: { membershipId: m.id, kind: "RETENTION_RELEASE", amountCents: amount } });
   const ok = await sendRecordedPayout(payout.id, {
-    email: m.user.email,
+    to: m.user,
     subject: `Ayni: te devolvemos tu garantía de ${m.group.name}`,
     note: "Cumpliste con todos tus aportes. ¡Gracias!",
     organizerId: m.group.organizerId,

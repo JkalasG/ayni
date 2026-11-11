@@ -19,7 +19,7 @@ let n = 0;
 const id = (p: string) => `${p}-${++n}`;
 const orders = new Map<string, { intent: string; amount: string; customId: string }>();
 const captures: { id: string; amount: number; source: string }[] = [];
-const payouts: { batch: string; email: string; amount: number }[] = [];
+const payouts: { batch: string; email: string; amount: number; type: string; senderItemId: string }[] = [];
 const voids: string[] = [];
 const invoices: { id: string; total: number; cancelled: boolean }[] = [];
 const auths = new Map<string, number>();
@@ -78,7 +78,7 @@ const server = http.createServer((req, res) => {
       if (seenBatches.has(senderBatch)) return send(400, { name: "USER_BUSINESS_ERROR", details: [{ issue: "SENDER_BATCH_ID_ALREADY_USED" }] });
       seenBatches.add(senderBatch);
       const b = id("BATCH");
-      payouts.push({ batch: b, email: item.receiver, amount: Math.round(Number(item.amount.value) * 100) });
+      payouts.push({ batch: b, email: item.receiver, amount: Math.round(Number(item.amount.value) * 100), type: item.recipient_type, senderItemId: item.sender_item_id });
       if (loseNextPayoutResponse) {
         loseNextPayoutResponse = false;
         return send(503, { name: "SERVICE_UNAVAILABLE" });
@@ -141,6 +141,7 @@ async function main() {
   const auth = await import(`${B}/src/auth`);
   const ledger = await import(`${B}/src/services/ledger`);
   const chatSvc = await import(`${B}/src/services/chat`);
+  const webhooks = await import(`${B}/src/services/webhooks`);
 
   // ------------------------------------------------ security: redirect allow-list
   assert.equal(auth.isAllowedRedirect("http://localhost:8081/groups/x"), true);
@@ -205,6 +206,8 @@ async function main() {
 
   const byTurn = (t: number) => members.find((m: any) => m.turn === t)!.user;
   const first = byTurn(1);
+  // The turn-1 member logged in with PayPal, so we know their PayPal account id.
+  await db.user.update({ where: { id: first.id }, data: { paypalPayerId: "PAYERID0FIRST" } });
 
   // Round 1: everyone pays except the LAST-turn member (holds no guarantee) -> waived -> DEFAULTED
   const last = byTurn(5);
@@ -274,10 +277,43 @@ async function main() {
   const pLast = await trust.trustProfile(last.id);
   assert.equal(pLast.abandoned, 1);
 
+  // ------------------------------------------------ payouts: who receives, and what PayPal says afterwards
+  const toFirst = payouts.filter((p) => p.email === "PAYERID0FIRST");
+  assert.ok(toFirst.length >= 1 && toFirst.every((p) => p.type === "PAYPAL_ID"), "known PayPal account: paid by account id");
+  assert.ok(payouts.filter((p) => p.email !== "PAYERID0FIRST").every((p) => p.type === "EMAIL" && p.email.includes("@")), "otherwise paid by email");
+
+  const somePayout = await db.payout.findFirstOrThrow({ where: { membership: { groupId: barrio.id }, kind: "POT", status: "SENT" }, include: { membership: true } });
+  const item = (type: string) => ({ event_type: `PAYMENT.PAYOUTS-ITEM.${type}`, resource: { payout_item_id: "ITEM-1", payout_item: { sender_item_id: somePayout.id } } });
+  const status = async () => (await db.payout.findUniqueOrThrow({ where: { id: somePayout.id } })).status;
+  const notes = (userId: string, title: string) => db.notification.count({ where: { userId, title } });
+  // Unclaimed: PayPal holds the money for the member. Not failed, so it cannot be sent a second time.
+  await webhooks.handleWebhook(item("UNCLAIMED"));
+  await webhooks.handleWebhook(item("UNCLAIMED"));
+  assert.equal(await status(), "SENT");
+  assert.equal(await notes(somePayout.membership.userId, "Tu dinero te espera en PayPal"), 1, "told once, even if PayPal repeats the event");
+  await assert.rejects(payments.retryPayout(rosa, somePayout.id), /not_failed/);
+  // Returned to us: now it failed, the organizer is told (once) and may send it again.
+  await webhooks.handleWebhook(item("RETURNED"));
+  await webhooks.handleWebhook(item("FAILED"));
+  assert.equal(await status(), "FAILED");
+  assert.equal(await notes(rosa.id, "Un envío no llegó"), 1);
+  const sentBefore = payouts.length;
+  assert.equal((await payments.retryPayout(rosa, somePayout.id)).ok, true);
+  await assert.rejects(payments.retryPayout(rosa, somePayout.id), /not_failed/);
+  assert.equal(payouts.length, sentBefore + 1, "re-sent exactly once");
+  const resent = await db.payout.findFirstOrThrow({ where: { id: (await db.payout.findUniqueOrThrow({ where: { id: somePayout.id } })).retriedById! } });
+  // The new payout succeeds; a late FAILED for it must not undo that.
+  const item2 = (type: string) => ({ event_type: `PAYMENT.PAYOUTS-ITEM.${type}`, resource: { payout_item_id: "ITEM-2", payout_item: { sender_item_id: resent.id } } });
+  await webhooks.handleWebhook(item2("SUCCEEDED"));
+  await webhooks.handleWebhook(item2("FAILED"));
+  assert.equal((await db.payout.findUniqueOrThrow({ where: { id: resent.id } })).status, "SUCCEEDED");
+  await webhooks.handleWebhook({ event_type: "SOMETHING.ELSE", resource: {} }); // unknown events are ignored
+  console.log("✔ payouts: by PayPal account id, unclaimed is not failed, states never go backwards");
+
   // ------------------------------------------------ payment history (ledger)
   const asOrganizer = await ledger.groupLedger(rosa, barrio.id);
   assert.equal(asOrganizer.totals.inCents, capturedIn, "ledger: charged == what PayPal captured");
-  assert.equal(asOrganizer.totals.outCents, paidOut, "ledger: sent == what PayPal paid out");
+  assert.equal(asOrganizer.totals.outCents, paidOut, "ledger: sent == what PayPal paid out (a re-sent payout counts once)");
   assert.equal(asOrganizer.guaranteeHeldCents, 0);
   const paidRows = asOrganizer.entries.filter((e: any) => e.type === "CONTRIBUTION");
   assert.ok(paidRows.length > 0 && paidRows.every((e: any) => e.feeCents === FEE_CENTS && e.ref), "PayPal fee and reference stored per capture");
