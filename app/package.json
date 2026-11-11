@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@bryntum/scheduler-enterprise": "^8.0.0",
     "@expo-google-fonts/atkinson-hyperlegible": "^0.4.1",
     "@expo-google-fonts/figtree": "^0.4.1",
     "@expo-google-fonts/unbounded": "^0.4.1",
@@ -42,10 +43,10 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
+    "web": "node scripts/copy-bryntum.mjs && expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "build:web": "expo export --platform web"
+    "build:web": "node scripts/copy-bryntum.mjs && expo export --platform web"
   },
   "private": true,
   "license": "MIT"

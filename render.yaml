@@ -42,7 +42,7 @@ services:
     name: ayni-web
     runtime: static
     rootDir: app
-    buildCommand: npm ci && npx expo export --platform web
+    buildCommand: npm ci && npm run build:web
     staticPublishPath: dist
     routes:
       - type: rewrite
@@ -51,3 +51,5 @@ services:
     envVars:
       - key: EXPO_PUBLIC_API_URL
         sync: false # e.g. https://ayni-api.onrender.com
+      - key: EXPO_PUBLIC_BRYNTUM_LICENSE
+        sync: false # Bryntum license key for the turn timeline (optional: without it the trial watermark shows)

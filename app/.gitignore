@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Bryntum stylesheets copied from node_modules by scripts/copy-bryntum.mjs
+public/bryntum/
