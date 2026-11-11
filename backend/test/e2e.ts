@@ -225,6 +225,7 @@ async function main() {
   const disputes = await import(`${B}/src/services/disputes`);
   const auth = await import(`${B}/src/auth`);
   const ledger = await import(`${B}/src/services/ledger`);
+  const guarantee = await import(`${B}/src/services/guarantee`);
   const chatSvc = await import(`${B}/src/services/chat`);
   const webhooks = await import(`${B}/src/services/webhooks`);
   const refundSvc = await import(`${B}/src/services/refunds`);
@@ -444,6 +445,28 @@ async function main() {
   const paidHere = asMember.entries.filter((e: any) => e.mine && e.direction === "in").reduce((s: number, e: any) => s + e.amountCents, 0);
   assert.equal(mineAll.entries.filter((e: any) => e.groupId === barrio.id && e.direction === "in").reduce((s: number, e: any) => s + e.amountCents, 0), paidHere);
   console.log("✔ payment history: totals match PayPal, fee per capture, private rows stay private");
+
+  // ------------------------------------------------ guarantee timeline
+  const gAll = await guarantee.groupGuarantee(rosa, barrio.id);
+  const retainedSum = (await db.round.aggregate({ where: { groupId: barrio.id }, _sum: { retainedCents: true } }))._sum.retainedCents!;
+  assert.ok(retainedSum > 0, "each pot remembers how much guarantee it withheld");
+  assert.equal(gAll.items.filter((i: any) => i.kind === "HELD").reduce((s: number, i: any) => s + i.amountCents, 0), retainedSum, "timeline: withheld == what the rounds recorded");
+  assert.equal(gAll.items.filter((i: any) => i.kind === "USED").length, 1, "the covered contribution shows as guarantee used");
+  assert.equal(gAll.items.filter((i: any) => i.kind === "USED")[0].membershipId, members.find((m: any) => m.userId === first.id)!.id);
+  assert.ok(gAll.items.filter((i: any) => i.kind === "HELD").every((i: any) => i.until), "everything withheld was returned once the group finished");
+  assert.equal(gAll.members.length, 5, "the organizer sees every member");
+  // The money returned is what was withheld minus what was used or recovered.
+  const returned = gAll.items.filter((i: any) => i.kind === "RETURNED").reduce((s: number, i: any) => s + i.amountCents, 0);
+  const usedUp = gAll.items.filter((i: any) => i.kind === "USED" || i.kind === "RECOVERED").reduce((s: number, i: any) => s + i.amountCents, 0);
+  assert.equal(returned + usedUp, retainedSum, "guarantee: withheld == returned + used");
+  // A member sees only their own story; the one who used theirs is the only one who sees that.
+  const gFirst = await guarantee.groupGuarantee(first, barrio.id);
+  assert.ok(gFirst.items.length > 0 && gFirst.items.every((i: any) => i.mine) && gFirst.members.length === 1);
+  assert.ok(gFirst.items.some((i: any) => i.kind === "USED"));
+  const gOther = await guarantee.groupGuarantee(regular, barrio.id);
+  assert.ok(gOther.items.every((i: any) => i.mine) && gOther.members.length === 1 && !gOther.items.some((i: any) => i.kind === "USED"));
+  await assert.rejects(guarantee.groupGuarantee(kusi, barrio.id), /not_a_member/);
+  console.log("✔ guarantee timeline: withheld == returned + used, organizer sees all, a member only their own");
 
   // ------------------------------------------------ disputes matched to the group
   const ds = await disputes.groupDisputes(barrio.id);

@@ -31,6 +31,7 @@ import { trustProfile } from "./services/trust";
 import { groupDisputes } from "./services/disputes";
 import { handleWebhook } from "./services/webhooks";
 import { groupLedger, myLedger } from "./services/ledger";
+import { groupGuarantee } from "./services/guarantee";
 import { cancelGroup, retryRefund } from "./services/refunds";
 import { removeSavedMethod, setAutoPay } from "./services/autopay";
 import { listClaims, openClaim, refundClaim, rejectClaim } from "./services/claims";
@@ -247,6 +248,8 @@ router.post("/groups/:id/reconciliation", ...authed(async (req, res) => res.json
 
 /** Payment history of the group, masked for whoever asks (see domain/ledger.ts). */
 router.get("/groups/:id/ledger", ...authed(async (req, res) => res.json(await groupLedger(req.user, req.params.id))));
+/** Guarantee timeline: the organizer sees every member, a member only their own (see domain/guarantee.ts). */
+router.get("/groups/:id/guarantee", ...authed(async (req, res) => res.json(await groupGuarantee(req.user, req.params.id))));
 
 router.get(
   "/groups/:id/ai-log",

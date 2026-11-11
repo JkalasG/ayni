@@ -20,7 +20,7 @@ test("a read-only key cannot reach private or unlisted endpoints, however they a
     "/groups/abc123/disputes",
     "/me", "/me/mcp-token", "/notifications", "/explore", "/requests/x", "/paypal/sdk-config",
     "/groups/abc123/ledger/extra", "/groups//ledger", "/groups/a/b", "/groups/../me", "/groups/abc123%2Fchat", "/groups/abc 123",
-    "/GROUPS", "", "/",
+    "/GROUPS", "", "/", "/groups/abc123/guarantee",
   ])
     assert.equal(mcpAllowed("GET", path), false, path);
 });

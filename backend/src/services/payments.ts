@@ -174,6 +174,8 @@ export async function releasePot(roundId: string) {
   // Claim the round atomically so a double click / retry cannot pay twice.
   const claim = await db.round.updateMany({ where: { id: roundId, status: "READY" }, data: { status: "PAID_OUT" } });
   if (claim.count === 0) return;
+  // Remember how much guarantee this round withheld, for the guarantee timeline.
+  await db.round.update({ where: { id: roundId }, data: { retainedCents: held, retainedAt: new Date() } });
 
   // If the recipient left a contribution unpaid in an earlier round, that debt comes out of their pot
   // and goes to whoever received less because of it.
