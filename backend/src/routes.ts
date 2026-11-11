@@ -34,6 +34,7 @@ import { groupLedger, myLedger } from "./services/ledger";
 import { cancelGroup, retryRefund } from "./services/refunds";
 import { removeSavedMethod, setAutoPay } from "./services/autopay";
 import { listClaims, openClaim, refundClaim, rejectClaim } from "./services/claims";
+import { groupReconciliation, reconcileNow } from "./services/reconcile";
 import { summarizeDisputes } from "./ai/agent";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
@@ -230,6 +231,10 @@ router.post(
 );
 
 // ---------------------------------------------------------------- transparency + disputes
+
+/** How many of this group's charges PayPal confirmed in the last daily check. */
+router.get("/groups/:id/reconciliation", ...authed(async (req, res) => res.json(await groupReconciliation(req.user, req.params.id))));
+router.post("/groups/:id/reconciliation", ...authed(async (req, res) => res.json(await reconcileNow(req.user, req.params.id))));
 
 /** Payment history of the group, masked for whoever asks (see domain/ledger.ts). */
 router.get("/groups/:id/ledger", ...authed(async (req, res) => res.json(await groupLedger(req.user, req.params.id))));

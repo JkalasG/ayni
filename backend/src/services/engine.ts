@@ -13,6 +13,7 @@ import { writeReminder } from "../ai/agent";
 import { coverWithRetention, retryUnknownPayouts, sendOverdueInvoice } from "./payments";
 import { retryPendingRefunds } from "./refunds";
 import { autoPayTick } from "./autopay";
+import { maybeReconcile } from "./reconcile";
 import { execute } from "./actions";
 import { notify, postToGroupChat } from "./notify";
 import { windows } from "./windows";
@@ -178,6 +179,7 @@ export function startEngine(intervalMs: number) {
       }
       await retryUnknownPayouts();
       await retryPendingRefunds();
+      await maybeReconcile().catch((e) => console.error("reconciliation failed", e));
     } catch (e) {
       console.error("engine tick failed", e);
     } finally {

@@ -31,6 +31,8 @@ const seenBatches = new Set<string>();
 const refunds: { id: string; capture: string; requestId: string }[] = [];
 let loseNextRefundResponse = false; // PayPal refunds, but our request times out (503)
 let failNextRefund = false; // PayPal answers with a definitive error
+let searchUnavailable = false; // Transaction Search not enabled for the app (403)
+const searchTamper = { omit: new Set<string>(), amount: new Map<string, number>(), extra: [] as { id: string; cents: number }[], status: new Map<string, string>() };
 let balanceCents: number | null = 10_000_000; // platform account's available balance; null = the Balances API is not enabled (403)
 const FEE_CENTS = 107; // what the fake PayPal reports as its fee on every capture
 let loseNextPayoutResponse = false; // PayPal gets the payout but our request times out (503)
@@ -136,6 +138,19 @@ const server = http.createServer((req, res) => {
       }
       return send(201, { id: rid, status: "COMPLETED" });
     }
+    if (u === "/v1/reporting/transactions") {
+      if (searchUnavailable) return send(403, { name: "NOT_AUTHORIZED" });
+      const detail = (tid: string, cents: number, code = "T0006", status = "S") => ({ transaction_info: { transaction_id: tid, transaction_event_code: code, transaction_status: status, transaction_amount: { currency_code: "USD", value: (cents / 100).toFixed(2) } } });
+      return send(200, {
+        total_pages: 1,
+        transaction_details: [
+          ...captures.filter((c) => !searchTamper.omit.has(c.id)).map((c) => detail(c.id, searchTamper.amount.get(c.id) ?? c.amount, "T0006", searchTamper.status.get(c.id) ?? "S")),
+          ...searchTamper.extra.map((x) => detail(x.id, x.cents)),
+          detail("REFUND-LINE", -500, "T1107"), // refunds and fees are never counted as charges
+          detail("FEE-LINE", 100, "T0300"),
+        ],
+      });
+    }
     if (u === "/v1/reporting/balances") {
       if (balanceCents == null) return send(403, { name: "NOT_AUTHORIZED" });
       return send(200, { balances: [{ currency: "USD", available_balance: { currency_code: "USD", value: (balanceCents / 100).toFixed(2) } }] });
@@ -214,6 +229,7 @@ async function main() {
   const webhooks = await import(`${B}/src/services/webhooks`);
   const refundSvc = await import(`${B}/src/services/refunds`);
   const autopay = await import(`${B}/src/services/autopay`);
+  const recon = await import(`${B}/src/services/reconcile`);
 
   // ------------------------------------------------ security: redirect allow-list
   assert.equal(auth.isAllowedRedirect("http://localhost:8081/groups/x"), true);
@@ -887,6 +903,57 @@ async function main() {
   assert.equal(blocked, 5);
   await chatSvc.sendMessage(wara, barrio.id, "sigo aquí");
   console.log("✔ group chat: members talk, assistant answers are private, moderation, unread, rate limit");
+
+  // ------------------------------------------------ daily reconciliation with PayPal Transaction Search
+  {
+    const later = () => new Date(Date.now() + 5 * 3600_000); // past PayPal's reporting lag
+    const clean = await recon.runReconciliation(later());
+    assert.equal(clean.status, "OK", JSON.stringify(clean.issues));
+    assert.ok(clean.checked > 10 && clean.matched === clean.checked, "every charge Ayni recorded is in PayPal with the same amount");
+    const barrioView = await recon.groupReconciliation(marisol, barrio.id);
+    assert.ok(barrioView.checked > 0 && barrioView.matched === barrioView.checked && barrioView.issueCount === 0);
+
+    // PayPal says something different: a capture is gone, one has another amount, one is stuck, a stranger charged us.
+    const some = await db.contribution.findMany({ where: { round: { groupId: barrio.id }, paypalCaptureId: { not: null } }, orderBy: { paidAt: "asc" }, take: 3 });
+    searchTamper.omit.add(some[0].paypalCaptureId);
+    searchTamper.amount.set(some[1].paypalCaptureId, some[1].amountCents + some[1].lateFeeCents - 100);
+    searchTamper.status.set(some[2].paypalCaptureId, "D");
+    searchTamper.extra.push({ id: "STRANGER-CAPTURE", cents: 999 });
+    const bad = await recon.runReconciliation(later());
+    assert.equal(bad.status, "ISSUES");
+    assert.deepEqual((bad.issues as any[]).map((i) => i.type).sort(), ["AMOUNT_MISMATCH", "MISSING_IN_PAYPAL", "NOT_COMPLETED", "UNKNOWN_CHARGE"]);
+    assert.equal(await db.notification.count({ where: { userId: rosa.id, title: "Diferencia con PayPal" } }), 1, "the organizer hears once, about their group");
+    assert.equal(await db.notification.count({ where: { userId: marisol.id, title: "Diferencia con PayPal" } }), 0, "other groups' organizers are not bothered");
+    const asOrganizer = await recon.groupReconciliation(rosa, barrio.id);
+    assert.equal(asOrganizer.issues.length, 3, "the organizer sees the detail; the stranger's charge belongs to no group");
+    const asMember = await recon.groupReconciliation(juan, barrio.id);
+    assert.equal(asMember.issueCount, 3);
+    assert.deepEqual(asMember.issues, [], "members only learn that something does not match, not the detail");
+    await assert.rejects(recon.groupReconciliation(kusi, barrio.id), /not_a_member/);
+    // A payment made a minute ago is never reported missing: it is outside the window.
+    searchTamper.omit.add(some[0].paypalCaptureId);
+    const young = await db.contribution.findFirstOrThrow({ where: { id: some[0].id } });
+    await db.contribution.update({ where: { id: young.id }, data: { paidAt: new Date() } });
+    const recent = await recon.runReconciliation(new Date());
+    assert.ok(!(recent.issues as any[]).some((i) => i.captureId === young.paypalCaptureId), "too recent for PayPal to list it yet");
+    await db.contribution.update({ where: { id: young.id }, data: { paidAt: young.paidAt } });
+    // The organizer can ask for a fresh check, but not over and over.
+    const runsBefore = await db.reconciliation.count();
+    await recon.reconcileNow(rosa, barrio.id);
+    await recon.reconcileNow(rosa, barrio.id);
+    assert.equal(await db.reconciliation.count(), runsBefore, "cooldown: the last run was seconds ago");
+    await assert.rejects(recon.reconcileNow(juan, barrio.id), /organizer_only/);
+    // Once a day on its own.
+    assert.equal(await recon.maybeReconcile(new Date()), null);
+    // Transaction Search not enabled: recorded as unavailable, nothing breaks, the last real result stays.
+    searchTamper.omit.clear(); searchTamper.amount.clear(); searchTamper.status.clear(); searchTamper.extra.length = 0;
+    searchUnavailable = true;
+    const off = await recon.runReconciliation(later());
+    assert.equal(off.status, "UNAVAILABLE");
+    assert.ok((await recon.groupReconciliation(rosa, barrio.id)).ranAt, "the last successful check is still shown");
+    searchUnavailable = false;
+    console.log("✔ reconciliation with PayPal: matches, four kinds of difference, privacy, lag window, cooldown, unavailable");
+  }
 
   // ------------------------------------------------ read-only key for the member's own AI assistant (MCP)
   {

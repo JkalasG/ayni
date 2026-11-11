@@ -350,6 +350,24 @@ model Claim {
   @@index([paypalDisputeId])
 }
 
+/**
+ * One run of the daily check of Ayni's records against PayPal Transaction Search.
+ */
+model Reconciliation {
+  id       String   @id @default(cuid())
+  ranAt    DateTime @default(now())
+  from     DateTime
+  to       DateTime
+  status   String // OK | ISSUES | UNAVAILABLE (e.g. Transaction Search is not enabled for the app)
+  detail   String?
+  checked  Int      @default(0)
+  matched  Int      @default(0)
+  issues   Json     @default("[]")
+  perGroup Json     @default("{}")
+
+  @@index([ranAt])
+}
+
 enum RefundStatus {
   PENDING // recorded; PayPal's answer is not known yet (retried with the same idempotency key)
   COMPLETED

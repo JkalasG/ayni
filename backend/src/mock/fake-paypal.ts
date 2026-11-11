@@ -249,6 +249,16 @@ ${o.vault ? `<p class="muted"><b>Guardar PayPal para pagos automáticos.</b> Aut
     })
   );
 
+  // ---------------- Transaction Search: the simulated account lists every charge it made
+  r.get("/v1/reporting/transactions", (_req, res) =>
+    res.json({
+      total_pages: 1,
+      transaction_details: captures.map((c) => ({
+        transaction_info: { transaction_id: c.id, transaction_event_code: "T0006", transaction_status: "S", transaction_amount: { currency_code: "USD", value: c.amount } },
+      })),
+    })
+  );
+
   // ---------------- Balances: the simulated platform account always has funds
   r.get("/v1/reporting/balances", (_req, res) => res.json({ balances: [{ currency: "USD", available_balance: { currency_code: "USD", value: "100000.00" } }] }));
 

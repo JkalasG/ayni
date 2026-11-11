@@ -378,6 +378,31 @@ export async function getPayoutBatch(batchId: string): Promise<any> {
   return call("payoutStatus", `/v1/payments/payouts/${batchId}`, { method: "GET" });
 }
 
+// ---------- Transaction Search (reporting) ----------
+
+export type SearchedCharge = { id: string; amountCents: number; status: string; invoiced: boolean };
+
+/**
+ * Incoming charges PayPal reports between two dates (Transaction Search). Read-only.
+ * The window must be under 31 days; PayPal can take up to ~3 hours to list a payment.
+ */
+export async function searchCharges(from: Date, to: Date): Promise<{ charges: SearchedCharge[] }> {
+  const stamp = (d: Date) => encodeURIComponent(d.toISOString().replace(/\.\d{3}Z$/, "+0000"));
+  const charges: SearchedCharge[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const res = await call<any>("searchTransactions", `/v1/reporting/transactions?start_date=${stamp(from)}&end_date=${stamp(to)}&fields=transaction_info&page_size=100&page=${page}`, { method: "GET" });
+    for (const d of res.transaction_details ?? []) {
+      const t = d.transaction_info ?? {};
+      const cents = toCents(t.transaction_amount?.value);
+      // Charges are positive payments ("T00xx"); refunds, fees and payouts have other codes or negative amounts.
+      if (!t.transaction_id || cents == null || cents <= 0 || !String(t.transaction_event_code ?? "").startsWith("T00")) continue;
+      charges.push({ id: t.transaction_id, amountCents: cents, status: String(t.transaction_status ?? ""), invoiced: !!t.invoice_id });
+    }
+    if (page >= Number(res.total_pages ?? 1)) break;
+  }
+  return { charges };
+}
+
 // ---------- Balances (reporting) ----------
 
 /**

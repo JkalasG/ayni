@@ -511,7 +511,18 @@ const es = {
   aiKeyRevoke: "Revocar todas mis claves",
   aiKeyRevoked: "Listo: todas tus claves dejaron de funcionar.",
   aiKeySteps: "En tu asistente, agrega el servidor MCP de Ayni con estos datos:",
-  aiKeyCopied: "Clave copiada.",
+  aiKeyCopied: "Clave copiada.",  rcTitle: "Verificado con PayPal",
+  rcOk: "de los cobros de este grupo coinciden con lo que PayPal tiene.",
+  rcIssues: "cobro(s) no coinciden con PayPal. El organizador ya fue avisado.",
+  rcWhen: "Última revisión",
+  rcNever: "Todavía no hay una revisión. Ayni compara sus registros con PayPal una vez al día.",
+  rcUnavailable: "La revisión con PayPal no está disponible por ahora.",
+  rcNow: "Revisar ahora",
+  rcDetail: "Cobro que no coincide",
+  rc_MISSING_IN_PAYPAL: "Ayni lo anotó, pero PayPal no lo tiene",
+  rc_AMOUNT_MISMATCH: "El monto es distinto en PayPal",
+  rc_NOT_COMPLETED: "En PayPal no está completado",
+  rcLag: "PayPal tarda unas horas en mostrar un pago, por eso la revisión no incluye lo de hoy.",
 };
 
 const en: typeof es = {
@@ -1022,7 +1033,18 @@ const en: typeof es = {
   aiKeyRevoke: "Revoke all my keys",
   aiKeyRevoked: "Done: all your keys stopped working.",
   aiKeySteps: "In your assistant, add Ayni's MCP server with these values:",
-  aiKeyCopied: "Key copied.",
+  aiKeyCopied: "Key copied.",  rcTitle: "Verified with PayPal",
+  rcOk: "of this group's charges match what PayPal has.",
+  rcIssues: "charge(s) do not match PayPal. The organizer has been told.",
+  rcWhen: "Last check",
+  rcNever: "No check yet. Ayni compares its records with PayPal once a day.",
+  rcUnavailable: "The PayPal check is not available right now.",
+  rcNow: "Check now",
+  rcDetail: "Charge that does not match",
+  rc_MISSING_IN_PAYPAL: "Ayni recorded it, but PayPal does not have it",
+  rc_AMOUNT_MISMATCH: "The amount is different in PayPal",
+  rc_NOT_COMPLETED: "It is not completed in PayPal",
+  rcLag: "PayPal takes a few hours to show a payment, so the check does not include today.",
 };
 
 export type Lang = "es" | "en";
