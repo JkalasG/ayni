@@ -743,6 +743,92 @@ async function main() {
     assert.equal((await db.user.findUniqueOrThrow({ where: { id: rosa.id } })).paypalVaultId, null);
     assert.equal(await db.membership.count({ where: { userId: rosa.id, autoPay: true } }), 0);
     console.log("✔ automatic payment: notice before charge, charged once, lost answer, decline, duplicate refunded, switch off");
+
+    // ---- claims: report a problem inside Ayni, linked to PayPal disputes through the capture id
+    const claimsSvc = await import(`${B}/src/services/claims`);
+    const juan4 = await mine(juan, 4);
+    const rosa3 = await mine(rosa, 3);
+    const juan3 = await mine(juan, 3);
+    const efrain3 = await mine(efrain, 3);
+    const rosa4Pending = await mine(rosa, 4);
+    const dispute = (id: string, captureId: string, type = "CREATED", extra: any = {}) => ({
+      event_type: `CUSTOMER.DISPUTE.${type}`,
+      resource: { dispute_id: id, reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED", status: "OPEN", disputed_transactions: [{ seller_transaction_id: captureId }], ...extra },
+    });
+    await assert.rejects(claimsSvc.openClaim(efrain, juan4.id, "DOUBLE_CHARGE", "x"), /not_found/, "only the person who paid can claim");
+    await assert.rejects(claimsSvc.openClaim(juan, juan4.id, "HACK", "x"), /invalid_kind/);
+    await assert.rejects(claimsSvc.openClaim(juan, juan4.id, "OTHER", " \u200B "), /message_required/);
+    await assert.rejects(claimsSvc.openClaim(rosa, rosa4Pending.id, "OTHER", "x"), /nothing_to_claim/, "nothing was charged yet");
+
+    // 1. Claim while the pot has not left: the organizer refunds, the contribution is pending again.
+    const cl = await claimsSvc.openClaim(juan, juan4.id, "DOUBLE_CHARGE", "Me cobraron dos veces");
+    await assert.rejects(claimsSvc.openClaim(juan, juan4.id, "OTHER", "otra vez"), /claim_exists/);
+    assert.equal(await db.notification.count({ where: { userId: wara.id, title: { startsWith: "Reclamo" } } }), 1);
+    assert.equal((await claimsSvc.listClaims(efrain, auto.id)).claims.length, 0, "other members never see it");
+    assert.equal((await claimsSvc.listClaims(juan, auto.id)).claims.length, 1);
+    const asOrg = await claimsSvc.listClaims(wara, auto.id);
+    assert.ok(asOrg.claims[0].canRefund && asOrg.claims[0].canReject && asOrg.claims[0].claimant === "Juan Carlos");
+    assert.ok(!(await claimsSvc.listClaims(juan, auto.id)).claims[0].canRefund, "the member cannot refund themselves");
+    await assert.rejects(claimsSvc.refundClaim(efrain, cl.id), /organizer_only/);
+    await assert.rejects(claimsSvc.refundClaim(juan, cl.id), /organizer_only/);
+    const refundsBeforeClaim = refunds.length;
+    assert.equal((await claimsSvc.refundClaim(wara, cl.id)).ok, true);
+    assert.equal(refunds.length, refundsBeforeClaim + 1, "refunded once");
+    assert.equal(refunds.at(-1)!.capture, juan4.paypalCaptureId);
+    assert.equal((await mine(juan, 4)).status, "PENDING");
+    assert.equal((await db.claim.findUniqueOrThrow({ where: { id: cl.id } })).status, "REFUNDED");
+    await assert.rejects(claimsSvc.refundClaim(wara, cl.id), /nothing_to_refund|not_open/);
+    assert.equal(refunds.length, refundsBeforeClaim + 1, "a second tap does not refund again");
+    // The refund also arrives as a webhook: it confirms, it does not create a second record.
+    await webhooks.handleWebhook(refundEvent("REFUNDED", refunds.at(-1)!.id, juan4.paypalCaptureId, "25.00"));
+    assert.equal(await db.refund.count({ where: { contributionId: juan4.id, reason: "CLAIM_REFUND" } }), 1);
+    assert.equal(await notices(juan, "Reclamo · Pasanaku automático"), 2, "accepted, then money back");
+
+    // 2. Claim after the pot left: Ayni cannot refund; the organizer explains; the member goes to PayPal.
+    const c2 = await claimsSvc.openClaim(juan, juan3.id, "WRONG_AMOUNT", "El monto no era el mío");
+    await assert.rejects(claimsSvc.refundClaim(wara, c2.id), /pot_already_sent/);
+    await assert.rejects(claimsSvc.rejectClaim(wara, c2.id, " "), /note_required/);
+    await assert.rejects(claimsSvc.rejectClaim(efrain, c2.id, "no"), /organizer_only/);
+    await claimsSvc.rejectClaim(wara, c2.id, "El aporte era de $25.00, como en todo el grupo.");
+    assert.equal((await db.claim.findUniqueOrThrow({ where: { id: c2.id } })).status, "REJECTED");
+    assert.equal(await db.notification.count({ where: { userId: juan.id, body: { contains: "Centro de resoluciones" } } }), 1, "told how to go to PayPal");
+    await assert.rejects(claimsSvc.rejectClaim(wara, c2.id, "otra vez"), /not_open/);
+    // The member opens the PayPal dispute: it attaches itself to the same claim by the capture id.
+    await webhooks.handleWebhook(dispute("PP-D-CL2", juan3.paypalCaptureId));
+    await webhooks.handleWebhook(dispute("PP-D-CL2", juan3.paypalCaptureId)); // repeated delivery
+    const esc2 = await db.claim.findUniqueOrThrow({ where: { id: c2.id } });
+    assert.equal(esc2.status, "ESCALATED");
+    assert.equal(esc2.paypalDisputeId, "PP-D-CL2");
+    assert.equal(await db.claim.count({ where: { contributionId: juan3.id } }), 1, "linked, not duplicated");
+    assert.equal(((esc2.timeline as any[]).filter((e) => e.type === "escalated")).length, 1);
+
+    // 3. A claim that is escalated can no longer be refunded by Ayni: PayPal decides (no double refund).
+    const c3 = await claimsSvc.openClaim(rosa, rosa3.id, "NOT_RECOGNIZED", "No reconozco este cobro");
+    await webhooks.handleWebhook(dispute("PP-D-CL3", rosa3.paypalCaptureId));
+    assert.equal((await db.claim.findUniqueOrThrow({ where: { id: c3.id } })).status, "ESCALATED");
+    await assert.rejects(claimsSvc.refundClaim(wara, c3.id), /escalated_to_paypal/);
+    await webhooks.handleWebhook(dispute("PP-D-CL3", rosa3.paypalCaptureId, "RESOLVED", { status: "RESOLVED", dispute_outcome: { outcome_code: "RESOLVED_SELLER_FAVOUR" } }));
+    await webhooks.handleWebhook(dispute("PP-D-CL3", rosa3.paypalCaptureId, "RESOLVED", { status: "RESOLVED", dispute_outcome: { outcome_code: "RESOLVED_SELLER_FAVOUR" } }));
+    const res3 = await db.claim.findUniqueOrThrow({ where: { id: c3.id } });
+    assert.equal(res3.status, "RESOLVED");
+    assert.equal(res3.outcome, "RESOLVED_SELLER_FAVOUR");
+    assert.ok(res3.note!.includes("a favor del grupo"));
+    assert.equal(await db.notification.count({ where: { userId: rosa.id, body: { contains: "PayPal resolvió tu disputa" } } }), 1, "told once");
+
+    // 4. A dispute with no claim before it still gets its record, already linked.
+    await webhooks.handleWebhook(dispute("PP-D-CL4", efrain3.paypalCaptureId));
+    const c4 = await db.claim.findFirstOrThrow({ where: { contributionId: efrain3.id } });
+    assert.equal(c4.kind, "PAYPAL_DISPUTE");
+    assert.equal(c4.status, "ESCALATED");
+    assert.equal(c4.paypalDisputeId, "PP-D-CL4");
+    assert.equal((await claimsSvc.listClaims(efrain, auto.id)).claims.length, 1, "the person sees the record of their own dispute");
+    assert.equal((await claimsSvc.listClaims(rosa, auto.id)).claims.length, 1);
+    assert.equal((await claimsSvc.listClaims(wara, auto.id)).claims.length, 4, "the organizer sees them all");
+    await assert.rejects(claimsSvc.listClaims(kusi, auto.id), /not_a_member/);
+    // A dispute about a capture that is not ours is ignored.
+    await webhooks.handleWebhook(dispute("PP-D-X", "OTHER-SHOP-CAPTURE"));
+    assert.equal(await db.claim.count({ where: { paypalDisputeId: "PP-D-X" } }), 0);
+    console.log("✔ claims: refund while the pot is here, explain, link with the PayPal dispute, outcome, no double refund");
   }
 
   // ------------------------------------------------ group chat

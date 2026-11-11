@@ -7,6 +7,7 @@ import { db } from "../db";
 import * as paypal from "../paypal";
 import { formatUSD } from "../domain/rules";
 import { notify, postToGroupChat } from "./notify";
+import { linkDispute, resolveDispute } from "./claims";
 
 export type GroupDispute = {
   id: string;
@@ -76,6 +77,7 @@ export async function onDisputeChanged(resource: any, resolved: boolean) {
   });
   if (!c) return;
   const g = c.round.group;
+  if (resolved) await resolveDispute(String(resource?.dispute_id ?? ""), resource?.dispute_outcome?.outcome_code, OUTCOME[String(resource?.dispute_outcome?.outcome_code ?? "")] ?? "PayPal la cerró");
   const what = `la disputa de ${c.membership.user.name} (ronda ${c.round.number})`;
   if (resolved) {
     const outcome = OUTCOME[String(resource?.dispute_outcome?.outcome_code ?? "")] ?? "PayPal la cerró";
@@ -95,6 +97,8 @@ export async function onDisputeCreated(resource: any) {
   });
   if (!c) return;
   const g = c.round.group;
+  // Link it to the member's claim (or open the record): from now on PayPal decides, Ayni stops refunding it.
+  if (resource?.dispute_id) await linkDispute(ids, String(resource.dispute_id), resource?.reason);
   await notify(
     g.organizerId,
     g.id,

@@ -647,6 +647,7 @@ export default function GroupScreen() {
         onPress={() => router.push(`/groups/${g.id}/chat`)}
       />
       <LinkRow title={t("payments")} hint={t("paymentsShort")} onPress={() => router.push(`/groups/${g.id}/payments`)} />
+      {g.status !== "FORMING" && <LinkRow title={t("claims")} hint={t("claimsShort")} onPress={() => router.push(`/groups/${g.id}/claims`)} />}
       <LinkRow title={t("aiLog")} hint={t("aiLogShort")} onPress={() => router.push(`/groups/${g.id}/ai-log`)} last={!g.isOrganizer} />
       {g.isOrganizer && g.status === "FORMING" && <LinkRow title={t("publish")} hint={g.isOpen ? t("isOpenNow") : t("publishHint")} onPress={() => router.push(`/groups/${g.id}/admission`)} />}
       {g.isOrganizer && g.status !== "FORMING" && <LinkRow title={t("checkDisputes")} hint={t("disputesHint")} onPress={() => router.push(`/groups/${g.id}/disputes`)} last />}

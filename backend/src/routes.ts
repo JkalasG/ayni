@@ -32,6 +32,7 @@ import { handleWebhook } from "./services/webhooks";
 import { groupLedger, myLedger } from "./services/ledger";
 import { cancelGroup, retryRefund } from "./services/refunds";
 import { removeSavedMethod, setAutoPay } from "./services/autopay";
+import { listClaims, openClaim, refundClaim, rejectClaim } from "./services/claims";
 import { summarizeDisputes } from "./ai/agent";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
@@ -256,6 +257,27 @@ router.post(
   ...authed(async (req, res) => {
     const { redirect, popup, save } = z.object({ redirect: z.string(), popup: z.boolean().optional(), save: z.boolean().optional() }).parse(req.body);
     res.json(await startCheckout(req.user, req.params.id, redirect, popup === true, save === true));
+  })
+);
+
+// ---------------------------------------------------------------- claims
+
+/** Report a problem with one of MY contributions. */
+router.post(
+  "/contributions/:id/claim",
+  ...authed(async (req, res) => {
+    const { kind, message } = z.object({ kind: z.string().max(30), message: z.string().max(1000).optional() }).parse(req.body);
+    res.status(201).json(await openClaim(req.user, req.params.id, kind, message));
+  })
+);
+/** My claims in this group; the organizer sees all of them. */
+router.get("/groups/:id/claims", ...authed(async (req, res) => res.json(await listClaims(req.user, req.params.id))));
+router.post("/claims/:id/refund", ...authed(async (req, res) => res.json(await refundClaim(req.user, req.params.id))));
+router.post(
+  "/claims/:id/reject",
+  ...authed(async (req, res) => {
+    const { note } = z.object({ note: z.string().max(1000) }).parse(req.body);
+    res.json(await rejectClaim(req.user, req.params.id, note));
   })
 );
 

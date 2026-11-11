@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Chips, Loading, Notice, P, Screen } from "@/components/ui";
 import { LedgerList, LedgerSummary, type LedgerEntry } from "@/components/ledger";
 import { useI18n } from "@/lib/i18n";
@@ -60,7 +60,7 @@ export default function GroupPayments() {
           { value: "out", label: t("lgOutF") },
         ]}
       />
-      {shown.length === 0 ? <Notice>{data.entries.length === 0 ? t("lgEmpty") : t("lgEmptyFilter")}</Notice> : <LedgerList entries={shown} locale={lang === "en" ? "en-US" : "es-BO"} />}
+      {shown.length === 0 ? <Notice>{data.entries.length === 0 ? t("lgEmpty") : t("lgEmptyFilter")}</Notice> : <LedgerList entries={shown} locale={lang === "en" ? "en-US" : "es-BO"} onReport={(contributionId) => router.push(`/groups/${id}/claims?new=${contributionId}` as any)} />}
       <P muted style={{ fontSize: 14, lineHeight: 20 }}>
         {data.isOrganizer ? t("lgPrivacyOrganizer") : t("lgPrivacy")}
       </P>

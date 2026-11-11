@@ -71,8 +71,23 @@ export async function cancelGroup(user: User, groupId: string) {
   return { ok: true, refunds: refunded };
 }
 
+const REFUND_NOTES: Record<string, string> = {
+  GROUP_CANCELLED: "Ayni: el pasanaku se canceló antes de empezar.",
+  DUPLICATE_CHARGE: "Ayni: este aporte ya estaba pagado.",
+  CLAIM_REFUND: "Ayni: devolución por tu reclamo.",
+};
+
+/** A refund of ours is confirmed. For a claim, that is also when the contribution becomes pending again. */
+async function markCompleted(r: { id: string; reason: string; contributionId: string | null; captureId: string; groupId: string }, paypalRefundId: string | null) {
+  const done = await db.refund.updateMany({ where: { id: r.id, status: { not: "COMPLETED" } }, data: { status: "COMPLETED", ...(paypalRefundId ? { paypalRefundId } : {}) } });
+  if (done.count === 1 && r.reason === "CLAIM_REFUND") {
+    const { onClaimRefunded } = await import("./claims");
+    await onClaimRefunded(r);
+  }
+}
+
 /** Send (or re-send) one recorded refund. Returns true when PayPal accepted it. */
-async function sendRefund(refundId: string): Promise<boolean> {
+export async function sendRefund(refundId: string): Promise<boolean> {
   const r = await db.refund.findUniqueOrThrow({ where: { id: refundId } });
   if (r.status === "COMPLETED") return true;
   try {
@@ -80,15 +95,15 @@ async function sendRefund(refundId: string): Promise<boolean> {
       captureId: r.captureId,
       // Same key while the outcome is unknown; a new one only after PayPal definitely said no.
       requestId: `refund-${r.id}-${r.attempts}`,
-      note: r.reason === "DUPLICATE_CHARGE" ? "Ayni: este aporte ya estaba pagado." : "Ayni: el pasanaku se canceló antes de empezar.",
+      note: REFUND_NOTES[r.reason] ?? "Ayni: devolución.",
     });
-    await db.refund.update({ where: { id: r.id }, data: { status: "COMPLETED", paypalRefundId: res.id } });
+    await markCompleted(r, res.id);
     return true;
   } catch (e) {
     const kind = paypal.refundErrorKind(e);
     console.error(`refund ${kind}`, r.id, e);
     if (kind === "already") {
-      await db.refund.update({ where: { id: r.id }, data: { status: "COMPLETED" } });
+      await markCompleted(r, null);
       return true;
     }
     if (kind === "failed") {
@@ -105,7 +120,7 @@ async function sendRefund(refundId: string): Promise<boolean> {
 
 /** Engine: refunds whose outcome we never learned (timeout, 5xx). */
 export async function retryPendingRefunds() {
-  const stale = await db.refund.findMany({ where: { status: "PENDING", reason: { in: ["GROUP_CANCELLED", "DUPLICATE_CHARGE"] }, createdAt: { lte: new Date(Date.now() - 60_000) } }, take: 20 });
+  const stale = await db.refund.findMany({ where: { status: "PENDING", reason: { in: ["GROUP_CANCELLED", "DUPLICATE_CHARGE", "CLAIM_REFUND"] }, createdAt: { lte: new Date(Date.now() - 60_000) } }, take: 20 });
   for (const r of stale) await sendRefund(r.id);
 }
 
@@ -130,10 +145,9 @@ export async function onCaptureRefunded(resource: any, reason: "PAYPAL_REFUND" |
   const captureId = captureIdOfRefund(resource);
   if (!paypalRefundId || !captureId) return;
 
-  const ours = await db.refund.findFirst({ where: { OR: [{ paypalRefundId }, { captureId, reason: { in: ["GROUP_CANCELLED", "DUPLICATE_CHARGE"] } }] } });
+  const ours = await db.refund.findFirst({ where: { OR: [{ paypalRefundId }, { captureId, reason: { in: ["GROUP_CANCELLED", "DUPLICATE_CHARGE", "CLAIM_REFUND"] } }] } });
   if (ours) {
-    if (ours.status !== "COMPLETED" || !ours.paypalRefundId)
-      await db.refund.update({ where: { id: ours.id }, data: { status: "COMPLETED", paypalRefundId: ours.paypalRefundId ?? paypalRefundId } }).catch(() => undefined);
+    if (ours.status !== "COMPLETED") await markCompleted(ours, ours.paypalRefundId ?? paypalRefundId).catch((e) => console.error("confirm refund failed", ours.id, e));
     return;
   }
 
@@ -153,6 +167,8 @@ export async function onCaptureRefunded(resource: any, reason: "PAYPAL_REFUND" |
       })
       .catch(() => null);
     if (!created) return; // this refund was already handled
+    // The money is back with the member: an open claim about it has nothing left to decide.
+    if (full) await db.claim.updateMany({ where: { contributionId: c.id, status: { in: ["OPEN", "REJECTED"] } }, data: { status: "REFUNDED", outcome: "REFUNDED_BY_PAYPAL", resolvedAt: new Date() } });
     const who = c.membership.user.name;
     if (reopen) {
       await db.$transaction(async (tx) => {

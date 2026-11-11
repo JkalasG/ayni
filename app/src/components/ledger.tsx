@@ -2,7 +2,7 @@
  * Payment history: one row per PayPal movement, grouped by day, newest first.
  * The server already decided what this person may see; this file only draws it.
  */
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/icons";
 import { SteppedBox } from "@/components/stepped";
 import { money } from "@/lib/api";
@@ -60,7 +60,7 @@ export function LedgerSummary({ items }: { items: { label: string; cents: number
  * `personal`: the screen is about one person, so amounts carry a sign
  * (− what I paid, + what I received) and the row names the group instead of the member.
  */
-export function LedgerList({ entries, locale, personal }: { entries: LedgerEntry[]; locale: string; personal?: boolean }) {
+export function LedgerList({ entries, locale, personal, onReport }: { entries: LedgerEntry[]; locale: string; personal?: boolean; onReport?: (contributionId: string) => void }) {
   const { c } = useScheme();
   const days: { label: string; rows: LedgerEntry[] }[] = [];
   for (const e of entries) {
@@ -78,7 +78,7 @@ export function LedgerList({ entries, locale, personal }: { entries: LedgerEntry
           </Text>
           <SteppedBox fill={c.surface} stroke={c.line} step={4} style={{ paddingHorizontal: space(4) }}>
             {d.rows.map((e, i) => (
-              <Row key={e.id} e={e} c={c} locale={locale} personal={personal} last={i === d.rows.length - 1} />
+              <Row key={e.id} e={e} c={c} locale={locale} personal={personal} last={i === d.rows.length - 1} onReport={onReport} />
             ))}
           </SteppedBox>
         </View>
@@ -87,7 +87,7 @@ export function LedgerList({ entries, locale, personal }: { entries: LedgerEntry
   );
 }
 
-function Row({ e, c, locale, personal, last }: { e: LedgerEntry; c: Palette; locale: string; personal?: boolean; last: boolean }) {
+function Row({ e, c, locale, personal, last, onReport }: { e: LedgerEntry; c: Palette; locale: string; personal?: boolean; last: boolean; onReport?: (contributionId: string) => void }) {
   const { t } = useI18n();
   const look = LOOK[e.type];
   const failed = e.status === "FAILED";
@@ -126,6 +126,12 @@ function Row({ e, c, locale, personal, last }: { e: LedgerEntry; c: Palette; loc
           <Text selectable style={{ fontFamily: fonts.body, fontSize: 12.5, color: c.muted }}>
             PayPal {t("ppRef")} {e.ref}
           </Text>
+        ) : null}
+        {/* Only on my own paid contributions: that is what a claim is about. */}
+        {onReport && e.mine && e.type === "CONTRIBUTION" && e.id.startsWith("c_") ? (
+          <Pressable accessibilityRole="button" onPress={() => onReport(e.id.slice(2))} style={{ minHeight: 40, justifyContent: "center", alignSelf: "flex-start" }}>
+            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: c.fucsia.text }}>{t("clReport")}</Text>
+          </Pressable>
         ) : null}
       </View>
     </View>

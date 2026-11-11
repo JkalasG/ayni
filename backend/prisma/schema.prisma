@@ -314,6 +314,40 @@ model AiLog {
   @@index([groupId, createdAt])
 }
 
+enum ClaimStatus {
+  OPEN // reported by the member, waiting for the organizer
+  REFUNDING // the organizer accepted; PayPal is giving the money back
+  REFUNDED
+  REJECTED // the organizer explained; the member can still open a PayPal dispute
+  ESCALATED // a PayPal dispute is open: PayPal decides, Ayni no longer refunds this contribution
+  RESOLVED // PayPal decided
+}
+
+/**
+ * A member's report about one of their own contributions, linked to a PayPal dispute through the capture id.
+ */
+model Claim {
+  id             String      @id @default(cuid())
+  groupId        String
+  contributionId String
+  membershipId   String
+  userId         String
+  kind           String // DOUBLE_CHARGE | WRONG_AMOUNT | NOT_RECOGNIZED | OTHER | PAYPAL_DISPUTE
+  message        String?
+  captureId      String // the PayPal capture the claim is about: how a dispute finds it
+  status         ClaimStatus @default(OPEN)
+  paypalDisputeId String?
+  outcome        String?
+  note           String? // the organizer's answer, or PayPal's decision in words
+  timeline       Json        @default("[]")
+  createdAt      DateTime    @default(now())
+  resolvedAt     DateTime?
+
+  @@index([groupId, status])
+  @@index([contributionId])
+  @@index([paypalDisputeId])
+}
+
 enum RefundStatus {
   PENDING // recorded; PayPal's answer is not known yet (retried with the same idempotency key)
   COMPLETED
