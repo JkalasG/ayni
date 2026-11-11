@@ -33,6 +33,8 @@ jobs:
         run: npm run typecheck
       - name: Money rules (unit tests)
         run: npm test
+      - name: MCP server (real stdio protocol, fake API)
+        run: npm run test:mcp
       - name: End-to-end flows (fake PayPal, real Postgres)
         run: npm run test:e2e
         env:

@@ -502,7 +502,16 @@ const es = {
   clErrNothing: "Este aporte no tiene un cobro de PayPal que reclamar.",
   clErrPot: "El pozo de esa ronda ya se envió: ya no se puede devolver desde Ayni. Puedes abrir una disputa en PayPal.",
   clErrEscalated: "PayPal ya tiene este caso: ahora decide PayPal.",
-  clErrMessage: "Cuéntanos qué pasó en pocas palabras.",
+  clErrMessage: "Cuéntanos qué pasó en pocas palabras.",  aiConnect: "Conectar mi asistente de IA",
+  aiConnectShort: "Deja que tu IA consulte tus pasanakus (solo lectura)",
+  aiConnectHint: "Con una clave de solo lectura, tu propio asistente (Claude u otro) puede responder \"¿cuánto debo?\" o \"muéstrame mis pagos\". Solo lee: no puede pagar, enviar dinero ni cambiar nada, y no ve tus mensajes privados.",
+  aiKeyCreate: "Crear clave de solo lectura",
+  aiKeyWarn: "Guárdala ahora: no se vuelve a mostrar. Quien la tenga puede leer tus pasanakus.",
+  aiKeyCopy: "Copiar clave",
+  aiKeyRevoke: "Revocar todas mis claves",
+  aiKeyRevoked: "Listo: todas tus claves dejaron de funcionar.",
+  aiKeySteps: "En tu asistente, agrega el servidor MCP de Ayni con estos datos:",
+  aiKeyCopied: "Clave copiada.",
 };
 
 const en: typeof es = {
@@ -1004,7 +1013,16 @@ const en: typeof es = {
   clErrNothing: "This contribution has no PayPal charge to claim.",
   clErrPot: "That round's pot was already sent: Ayni can no longer refund it. You can open a dispute in PayPal.",
   clErrEscalated: "PayPal already has this case: PayPal decides now.",
-  clErrMessage: "Tell us what happened in a few words.",
+  clErrMessage: "Tell us what happened in a few words.",  aiConnect: "Connect my AI assistant",
+  aiConnectShort: "Let your AI read your circles (read-only)",
+  aiConnectHint: "With a read-only key, your own assistant (Claude or another) can answer \"how much do I owe?\" or \"show my payments\". It only reads: it cannot pay, send money or change anything, and it cannot see your private messages.",
+  aiKeyCreate: "Create a read-only key",
+  aiKeyWarn: "Save it now: it is not shown again. Anyone who has it can read your circles.",
+  aiKeyCopy: "Copy key",
+  aiKeyRevoke: "Revoke all my keys",
+  aiKeyRevoked: "Done: all your keys stopped working.",
+  aiKeySteps: "In your assistant, add Ayni's MCP server with these values:",
+  aiKeyCopied: "Key copied.",
 };
 
 export type Lang = "es" | "en";

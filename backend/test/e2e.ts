@@ -888,6 +888,41 @@ async function main() {
   await chatSvc.sendMessage(wara, barrio.id, "sigo aquí");
   console.log("✔ group chat: members talk, assistant answers are private, moderation, unread, rate limit");
 
+  // ------------------------------------------------ read-only key for the member's own AI assistant (MCP)
+  {
+    const jwt = (await import("jsonwebtoken")).default;
+    const call = async (token: string, method: string, path: string) => {
+      const req: any = { headers: { authorization: `Bearer ${token}` }, method, path };
+      let status = 200;
+      let nexted = false;
+      const res: any = { status(c: number) { status = c; return res; }, json() { return res; } };
+      await auth.requireAuth(req, res, () => { nexted = true; });
+      return { status, nexted, scope: req.tokenScope, userId: req.user?.id };
+    };
+    const fresh = await db.user.findUniqueOrThrow({ where: { id: rosa.id } });
+    const key = auth.issueMcpToken(fresh.id, fresh.mcpEpoch);
+    const read = await call(key, "GET", `/groups/${barrio.id}`);
+    assert.ok(read.nexted && read.scope === "mcp" && read.userId === rosa.id, "the key reads as its owner");
+    for (const [method, p] of [["GET", `/groups/${barrio.id}/chat`], ["POST", `/groups/${barrio.id}/chat`], ["POST", "/groups"], ["POST", "/me/mcp-token"], ["GET", "/me"], ["POST", `/claims/x/refund`], ["DELETE", "/me/payment-method"]] as const) {
+      const r = await call(key, method, p);
+      assert.equal(r.status, 403, `${method} ${p}`);
+      assert.equal(r.nexted, false);
+    }
+    // the app's own token is untouched by all of this
+    const app = await call(auth.issueToken(rosa.id), "POST", `/groups/${barrio.id}/chat`);
+    assert.ok(app.nexted && app.scope === "app");
+    // an unknown scope is refused
+    assert.equal((await call(jwt.sign({ sub: rosa.id, scope: "admin" }, "test"), "GET", "/groups")).status, 401);
+    assert.equal((await call(jwt.sign({ sub: rosa.id, scope: "mcp" }, "test"), "GET", "/groups")).status, 401, "a key without its epoch is not valid");
+    // revoking: every key made before stops working at once; a new one works
+    await db.user.update({ where: { id: rosa.id }, data: { mcpEpoch: { increment: 1 } } });
+    assert.equal((await call(key, "GET", "/groups")).status, 401);
+    const renewed = await db.user.findUniqueOrThrow({ where: { id: rosa.id } });
+    assert.ok((await call(auth.issueMcpToken(renewed.id, renewed.mcpEpoch), "GET", "/groups")).nexted);
+    assert.ok((await call(auth.issueToken(rosa.id), "GET", "/groups")).nexted, "the app session is not affected by revoking keys");
+    console.log("✔ read-only key: reads only the allowlist, never writes, revocable, app session unaffected");
+  }
+
   const reminderLogs = await db.aiLog.findMany({ where: { kind: "reminder" } });
   assert.ok(reminderLogs.length > 0 && reminderLogs.every((l: any) => l.audience === "organizer" && l.subjectUserId));
   const logs = await db.aiLog.groupBy({ by: ["kind", "source"], _count: true });

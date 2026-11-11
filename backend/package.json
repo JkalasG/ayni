@@ -15,10 +15,13 @@
     "test": "tsx --test src/**/*.test.ts",
     "test:e2e": "tsx test/e2e.ts",
     "test:smoke": "node test/smoke.mjs",
+    "test:mcp": "node test/mcp.mjs",
+    "mcp": "tsx src/mcp/server.ts",
     "mock:reset": "tsx src/mock/reset.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@prisma/client": "^6.16.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

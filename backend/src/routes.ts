@@ -7,6 +7,7 @@ import {
   appendQuery,
   isAllowedRedirect,
   issueToken,
+  issueMcpToken,
   readState,
   requireAuth,
   signState,
@@ -101,6 +102,23 @@ router.patch(
   })
 );
 router.get("/me/profile", ...authed(async (req, res) => res.json(await trustProfile(req.user.id))));
+/** Create a read-only key for MY AI assistant (MCP). Only the app can ask for it, never another read-only key. */
+router.post(
+  "/me/mcp-token",
+  ...authed(async (req, res) => {
+    if (req.tokenScope === "mcp") throw new HttpError(403, "read_only_key");
+    res.json({ token: issueMcpToken(req.user.id, req.user.mcpEpoch), expiresInDays: 30 });
+  })
+);
+/** Revoke every read-only key I ever created. */
+router.delete(
+  "/me/mcp-token",
+  ...authed(async (req, res) => {
+    if (req.tokenScope === "mcp") throw new HttpError(403, "read_only_key");
+    await db.user.update({ where: { id: req.user.id }, data: { mcpEpoch: { increment: 1 } } });
+    res.json({ ok: true });
+  })
+);
 /** Remove my saved PayPal method: deleted at PayPal, and automatic payment stops in all my groups. */
 router.delete("/me/payment-method", ...authed(async (req, res) => res.json(await removeSavedMethod(req.user))));
 /** Everything I paid and received through PayPal, across my groups. */

@@ -175,7 +175,8 @@ export default function Passport() {
 
   const paymentsLink = (
     <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.line }}>
-      <LinkRow title={t("myPayments")} hint={t("myPaymentsShort")} onPress={() => router.push("/payments" as any)} last />
+      <LinkRow title={t("myPayments")} hint={t("myPaymentsShort")} onPress={() => router.push("/payments" as any)} />
+      <LinkRow title={t("aiConnect")} hint={t("aiConnectShort")} onPress={() => router.push("/connect" as any)} last />
     </View>
   );
 
