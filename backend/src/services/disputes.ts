@@ -72,5 +72,5 @@ export async function onDisputeCreated(resource: any) {
     `Disputa de PayPal · ${g.name}`,
     `${c.membership.user.name} abrió una disputa por su aporte de la ronda ${c.round.number} (${resource?.reason ?? "sin motivo"}). Revisa "Disputas" en el grupo.`
   );
-  await postToGroupChat(g.id, `Se abrió una disputa de PayPal sobre un aporte de la ronda ${c.round.number}. El organizador la está revisando.`);
+  await postToGroupChat(g.id, `Se abrió una disputa de PayPal sobre un aporte de la ronda ${c.round.number}. El organizador la está revisando.`, { type: "dispute", round: c.round.number });
 }

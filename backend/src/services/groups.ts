@@ -20,6 +20,7 @@ import { trustProfile } from "./trust";
 import { logAi } from "./ailog";
 import { HttpError } from "./errors";
 import { windows } from "./windows";
+import { unreadCount } from "./chat";
 
 export { HttpError };
 
@@ -306,6 +307,7 @@ export async function groupDetail(user: User, groupId: string) {
     actions: isOrganizer ? group.actions : [],
     myMembershipId: me.id,
     isOrganizer,
+    unreadChat: await unreadCount(me),
     payouts,
     paypalMode: config.mode,
     failedPayouts: failedPayouts.map((p) => ({ id: p.id, kind: p.kind, status: p.status, amountCents: p.amountCents, name: p.membership.user.name })),

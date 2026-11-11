@@ -140,6 +140,7 @@ async function main() {
   const disputes = await import(`${B}/src/services/disputes`);
   const auth = await import(`${B}/src/auth`);
   const ledger = await import(`${B}/src/services/ledger`);
+  const chatSvc = await import(`${B}/src/services/chat`);
 
   // ------------------------------------------------ security: redirect allow-list
   assert.equal(auth.isAllowedRedirect("http://localhost:8081/groups/x"), true);
@@ -360,6 +361,63 @@ async function main() {
   const r1c = await db.contribution.findMany({ where: { round: { groupId: open.id, number: 1 }, status: "PAID" } });
   assert.equal(r1c.length, 2, "Tomás and Kusi deposits are their round-1 contributions");
   console.log("✔ open group order:", om.map((m: any) => `${m.turn}.${m.user.name} ${m.retentionPct}%`).join(", "));
+
+  // ------------------------------------------------ group chat
+  // PayPal events are cards with data (the app translates them), never free text with private details.
+  const events = await db.chatMessage.findMany({ where: { groupId: barrio.id, kind: "event" } });
+  assert.ok(events.some((m: any) => m.event.type === "paid") && events.some((m: any) => m.event.type === "pot") && events.some((m: any) => m.event.type === "finished"));
+  assert.ok(events.filter((m: any) => m.event.type === "paid").every((m: any) => !("amountCents" in m.event)), "a paid event carries no amount (it would reveal a late fee)");
+
+  await chatSvc.markRead(juan, barrio.id);
+  await chatSvc.sendMessage(rosa, barrio.id, "  Gracias a todos por cumplir \u200B ");
+  const sent = (await chatSvc.listMessages(juan, barrio.id)).at(-1);
+  assert.equal(sent.content, "Gracias a todos por cumplir");
+  assert.equal(sent.authorName, "Doña Rosa");
+  assert.equal(sent.private, false);
+  const juanMember = await db.membership.findUniqueOrThrow({ where: { userId_groupId: { userId: juan.id, groupId: barrio.id } } });
+  assert.equal(await chatSvc.unreadCount(juanMember), 1, "one unread message from someone else");
+  const rosaMember = await db.membership.findUniqueOrThrow({ where: { userId_groupId: { userId: rosa.id, groupId: barrio.id } } });
+  assert.equal(await chatSvc.unreadCount(rosaMember), 0, "my own message is not unread for me");
+
+  // A question to the assistant (button or @ayni) is private to whoever asked.
+  const asked = await chatSvc.sendMessage(juan, barrio.id, "¿cuánto debo?", true);
+  assert.ok(asked.reply);
+  await chatSvc.sendMessage(juan, barrio.id, "@ayni ¿cuándo me toca?");
+  const juanSees = await chatSvc.listMessages(juan, barrio.id);
+  const rosaSees = await chatSvc.listMessages(rosa, barrio.id);
+  assert.equal(juanSees.filter((m: any) => m.private).length, 4, "two questions and two answers");
+  assert.ok(juanSees.some((m: any) => m.private && m.content === "¿cuándo me toca?"), "the mention is removed from the question");
+  assert.equal(rosaSees.filter((m: any) => m.private).length, 0, "not even the organizer reads a member's private questions");
+  assert.equal(await chatSvc.unreadCount(rosaMember), 0, "private exchanges of others never count as unread");
+  const chatLogs = await db.aiLog.findMany({ where: { groupId: barrio.id, kind: "chat" } });
+  assert.ok(chatLogs.length === 2 && chatLogs.every((l: any) => l.audience === "organizer" && l.subjectUserId === juan.id));
+
+  // Polling: only what came after the last message I have.
+  const newer = await chatSvc.listMessages(rosa, barrio.id, new Date(sent.createdAt));
+  assert.equal(newer.length, 0);
+  await chatSvc.sendMessage(juan, barrio.id, "¡De nada!");
+  assert.equal((await chatSvc.listMessages(rosa, barrio.id, new Date(sent.createdAt))).length, 1);
+
+  // Moderation: the author or the organizer hides a message; nobody else; events cannot be hidden.
+  const juanMsg = (await chatSvc.listMessages(marisol, barrio.id)).at(-1);
+  assert.equal(juanMsg.canHide, false);
+  await assert.rejects(chatSvc.hideMessage(marisol, barrio.id, juanMsg.id), /cannot_hide/);
+  await assert.rejects(chatSvc.hideMessage(rosa, barrio.id, events[0].id), /cannot_hide/);
+  await chatSvc.hideMessage(rosa, barrio.id, juanMsg.id);
+  const hidden = (await chatSvc.listMessages(marisol, barrio.id)).find((m: any) => m.id === juanMsg.id);
+  assert.equal(hidden.hidden, true);
+  assert.equal(hidden.content, "");
+
+  // Not a member, empty text: rejected.
+  await assert.rejects(chatSvc.listMessages(kusi, barrio.id), /not_a_member/);
+  await assert.rejects(chatSvc.sendMessage(kusi, barrio.id, "hola"), /not_a_member/);
+  await assert.rejects(chatSvc.sendMessage(rosa, barrio.id, " \u200B "), /empty_message/);
+  // A burst from one person is stopped (20 per minute); other members can still write.
+  let blocked = 0;
+  for (let i = 0; i < 25; i++) await chatSvc.sendMessage(efrain, barrio.id, `mensaje ${i}`).catch(() => blocked++);
+  assert.equal(blocked, 5);
+  await chatSvc.sendMessage(wara, barrio.id, "sigo aquí");
+  console.log("✔ group chat: members talk, assistant answers are private, moderation, unread, rate limit");
 
   const reminderLogs = await db.aiLog.findMany({ where: { kind: "reminder" } });
   assert.ok(reminderLogs.length > 0 && reminderLogs.every((l: any) => l.audience === "organizer" && l.subjectUserId));

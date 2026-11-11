@@ -10,8 +10,17 @@ export async function notify(userId: string, groupId: string | null, kind: strin
   if (user?.pushToken) await sendPush(user.pushToken, title, body, { groupId, kind });
 }
 
-export async function postToGroupChat(groupId: string, content: string) {
-  await db.chatMessage.create({ data: { groupId, role: "system", content } });
+/** Something that happened in the group, shown in the chat as a card. `content` is the plain-text version. */
+export type ChatEvent =
+  | { type: "paid"; name: string; round: number }
+  | { type: "pot"; name: string; round: number; amountCents: number; heldCents: number }
+  | { type: "ready"; round: number }
+  | { type: "joined"; name: string; newcomer: boolean }
+  | { type: "dispute"; round: number }
+  | { type: "finished" };
+
+export async function postToGroupChat(groupId: string, content: string, event?: ChatEvent) {
+  await db.chatMessage.create({ data: { groupId, role: "system", content, ...(event ? { kind: "event", event } : {}) } });
 }
 
 /** Expo push service: no extra SDK needed. Failures never break the money flow. */

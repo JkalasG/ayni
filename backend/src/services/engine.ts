@@ -99,7 +99,7 @@ export async function tickGroup(groupId: string, now = new Date()) {
       const claim = await db.round.updateMany({ where: { id: round.id, status: "COLLECTING" }, data: { status: "READY" } });
       if (claim.count === 1) {
         await askToReleasePot(groupId, round.id, round.number, round.recipient.user.name, group.organizerId, now, w.approval);
-        await postToGroupChat(groupId, `¡Todos cumplieron la ronda ${round.number}! Esperando confirmación del organizador.`);
+        await postToGroupChat(groupId, `¡Todos cumplieron la ronda ${round.number}! Esperando confirmación del organizador.`, { type: "ready", round: round.number });
       }
     }
   } else if (round?.status === "READY") {

@@ -239,7 +239,11 @@ export async function acceptRequest(requestId: string) {
     "¡Te aceptaron!",
     `Ya eres parte de ${g.name}.` + (depositCaptureId ? ` Tu depósito de $${formatUSD(r.depositCents)} cuenta como tu primer aporte.` : "")
   );
-  await postToGroupChat(g.id, `${r.user.name} se unió al pasanaku${profile.isNewcomer ? " (miembro nuevo: turno en la segunda mitad y garantía adicional)" : ""}.`);
+  await postToGroupChat(g.id, `${r.user.name} se unió al pasanaku${profile.isNewcomer ? " (miembro nuevo: turno en la segunda mitad y garantía adicional)" : ""}.`, {
+    type: "joined",
+    name: r.user.name,
+    newcomer: profile.isNewcomer,
+  });
 }
 
 export async function rejectRequest(requestId: string, why: "organizer" | "rules" | "timeout" | "full") {

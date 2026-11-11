@@ -107,7 +107,24 @@ if (approve) {
 
 // --- chat / ai-log / disputes / notifications
 r = await call('GET', `/groups/${familia.id}/chat`, { token: rosa }); ok('GET /groups/:id/chat', r.status === 200 && Array.isArray(r.json), r.status);
-r = await call('POST', `/groups/${familia.id}/chat`, { token: rosa, body: { text: '¿cuánto debo?' } }); ok('POST /groups/:id/chat (assistant fallback)', r.status === 200 && typeof r.json.reply === 'string', r.status + JSON.stringify(r.json).slice(0, 120));
+r = await call('POST', `/groups/${familia.id}/chat`, { token: rosa, body: { text: '¿cuánto debo?', toAssistant: true } }); ok('POST /groups/:id/chat to the assistant (fallback)', r.status === 200 && typeof r.json.reply === 'string', r.status + JSON.stringify(r.json).slice(0, 120));
+r = await call('POST', `/groups/${familia.id}/chat`, { token: rosa, body: { text: 'Hola a todos' } }); ok('POST /groups/:id/chat to the group', r.status === 200 && r.json.reply === null, r.status + JSON.stringify(r.json).slice(0, 120));
+r = await call('POST', `/groups/${familia.id}/chat`, { token: kusi, body: { text: 'hola' } }); ok('POST chat non-member -> 403', r.status === 403, r.status);
+r = await call('POST', `/groups/${familia.id}/chat`, { token: rosa, body: { text: '   ' } }); ok('POST chat empty text -> 400', r.status === 400, r.status);
+{
+  const asRosa = (await call('GET', `/groups/${familia.id}/chat`, { token: rosa })).json;
+  const asMari = (await call('GET', `/groups/${familia.id}/chat`, { token: mari })).json;
+  ok('chat: Rosa sees her private question to the assistant', asRosa.some(m => m.private && m.content === '¿cuánto debo?'));
+  ok('chat: another member does not see it', !asMari.some(m => m.private) && asMari.some(m => m.content === 'Hola a todos'));
+  const hello = asMari.find(m => m.content === 'Hola a todos');
+  r = await call('GET', `/groups/${familia.id}/chat?after=${encodeURIComponent(hello.createdAt)}`, { token: mari }); ok('GET chat ?after= returns only newer messages', r.status === 200 && r.json.length === 0, JSON.stringify(r.json).slice(0, 80));
+  r = await call('GET', `/groups/${familia.id}/chat?after=yesterday`, { token: mari }); ok('GET chat ?after= invalid -> 400', r.status === 400, r.status);
+  r = await call('GET', `/groups/${familia.id}`, { token: mari }); ok('group detail counts unread chat messages', r.json.unreadChat >= 1, r.json.unreadChat);
+  r = await call('POST', `/groups/${familia.id}/chat/read`, { token: mari, body: {} }); ok('POST /groups/:id/chat/read', r.status === 200, r.status);
+  r = await call('GET', `/groups/${familia.id}`, { token: mari }); ok('unread counter back to 0', r.json.unreadChat === 0, r.json.unreadChat);
+  r = await call('POST', `/groups/${familia.id}/chat/${hello.id}/hide`, { token: mari, body: {} }); ok('hide someone else\'s message as a member -> 403', r.status === 403, r.status);
+  r = await call('POST', `/groups/${familia.id}/chat/${hello.id}/hide`, { token: rosa, body: {} }); ok('POST /groups/:id/chat/:id/hide by its author', r.status === 200, r.status);
+}
 r = await call('GET', `/groups/${familia.id}/chat`, { token: kusi }); ok('GET chat non-member -> 403', r.status === 403, r.status);
 r = await call('GET', `/groups/${familia.id}/ai-log`, { token: rosa }); ok('GET /groups/:id/ai-log', r.status === 200, r.status);
 r = await call('GET', `/groups/${familia.id}/disputes`, { token: rosa }); ok('GET /groups/:id/disputes organizer', r.status === 200 && 'disputes' in r.json, r.status);

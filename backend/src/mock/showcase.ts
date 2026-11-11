@@ -16,6 +16,7 @@ import { execute } from "../services/actions";
 import { tickGroup } from "../services/engine";
 import { completeDeposit, requestToJoin } from "../services/admission";
 import { chat } from "../ai/agent";
+import { sendMessage } from "../services/chat";
 
 async function waitForApi() {
   for (let i = 0; i < 50; i++) {
@@ -77,10 +78,15 @@ export async function runShowcase() {
   await execute(release, "APPROVED");
   for (const u of [juan, marisol, rosa]) await pay(u, 2);
 
-  // a conversation, answered by the assistant without AI
+  // members talking to each other
+  await sendMessage(rosa, family.id, "¡Buen día a todos! Ya salió el pozo de la primera ronda.");
+  await sendMessage(marisol, family.id, "Gracias, Doña Rosa. Yo ya pagué la segunda.");
+  await sendMessage(wara, family.id, "Yo pago mañana, que me depositan desde Virginia.");
+  // private questions to the assistant (each member only sees their own), answered without AI
   await chat(juan, family.id, "¿Cuánto debo?");
   await chat(efrain, family.id, "¿Cuándo me toca?");
   await chat(wara, family.id, "¿Quién falta pagar?");
+  await chat(rosa, family.id, "¿Quién falta pagar?");
 
   const members = await db.membership.findMany({ where: { groupId: family.id }, include: { user: true } });
   const mw = members.find((m) => m.userId === wara.id)!;

@@ -29,7 +29,8 @@ import { completeDeposit, exploreOpenGroups, myRequest, requestToJoin } from "./
 import { trustProfile } from "./services/trust";
 import { groupDisputes, onDisputeCreated } from "./services/disputes";
 import { groupLedger, myLedger } from "./services/ledger";
-import { chat, summarizeDisputes } from "./ai/agent";
+import { summarizeDisputes } from "./ai/agent";
+import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
 export const router = Router();
 
@@ -353,21 +354,36 @@ async function assertMember(userId: string, groupId: string) {
   if (!m) throw new HttpError(403, "not_a_member");
 }
 
+/** The latest messages; with ?after=<ISO date> only the newer ones (the app polls with it). */
 router.get(
   "/groups/:id/chat",
   ...authed(async (req, res) => {
-    await assertMember(req.user.id, req.params.id);
-    const msgs = await db.chatMessage.findMany({ where: { groupId: req.params.id }, orderBy: { createdAt: "asc" }, take: 200 });
-    const users = await db.user.findMany({ where: { id: { in: msgs.map((m) => m.userId).filter(Boolean) as string[] } }, select: { id: true, name: true } });
-    res.json(msgs.map((m) => ({ ...m, authorName: users.find((u) => u.id === m.userId)?.name ?? null })));
+    const { after } = z.object({ after: z.string().datetime().optional() }).parse(req.query);
+    res.json(await listMessages(req.user, req.params.id, after ? new Date(after) : undefined));
   })
 );
+/** Write to the group, or to the assistant (`toAssistant`, or an @ayni mention): that exchange is private. */
 router.post(
   "/groups/:id/chat",
   ...authed(async (req, res) => {
+    const { text, toAssistant } = z.object({ text: z.string().min(1).max(4000), toAssistant: z.boolean().optional() }).parse(req.body);
+    res.json(await sendMessage(req.user, req.params.id, text, toAssistant === true));
+  })
+);
+router.post(
+  "/groups/:id/chat/read",
+  ...authed(async (req, res) => {
     await assertMember(req.user.id, req.params.id);
-    const { text } = z.object({ text: z.string().min(1).max(2000) }).parse(req.body);
-    res.json(await chat(req.user, req.params.id, text));
+    await markRead(req.user, req.params.id);
+    res.json({ ok: true });
+  })
+);
+/** Take back my own message, or (organizer) moderate someone else's. */
+router.post(
+  "/groups/:id/chat/:messageId/hide",
+  ...authed(async (req, res) => {
+    await hideMessage(req.user, req.params.id, req.params.messageId);
+    res.json({ ok: true });
   })
 );
 

@@ -155,6 +155,7 @@ model Membership {
   riskReason         String? // AI explanation, shown to the group
   isNewcomer         Boolean        @default(false) // admitted to an open group with no Ayni history
   depositCaptureId   String? // admission deposit, used as their round-1 contribution
+  chatReadAt         DateTime? // last time they opened the group chat (unread counter)
   joinedAt           DateTime       @default(now())
   contributions      Contribution[]
   payouts            Payout[]
@@ -236,8 +237,17 @@ model ChatMessage {
   group     Group    @relation(fields: [groupId], references: [id])
   userId    String? // null => assistant / system
   role      String // "user" | "assistant" | "system"
+  kind      String   @default("text") // "text" | "event" (something that happened, e.g. PayPal confirmed a payment)
+  event     Json? // event data the app renders in the reader's language: { type, round?, name?, amountCents?, heldCents? }
   content   String
+  // Questions to the assistant and its answers talk about one person's money: only that member sees them.
+  visibleToUserId String?
+  // Taken back by its author or moderated by the organizer: the row stays, the text is no longer shown.
+  hiddenAt   DateTime?
+  hiddenById String?
   createdAt DateTime @default(now())
+
+  @@index([groupId, createdAt])
 }
 
 model Notification {

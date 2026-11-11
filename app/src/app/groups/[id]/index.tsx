@@ -89,6 +89,7 @@ type Group = {
   potCents: number;
   payouts: PPPayout[];
   paypalMode: "live" | "mock";
+  unreadChat: number;
 };
 
 const statusColor = (c: Palette, s: Group["status"]) =>
@@ -525,7 +526,11 @@ export default function GroupScreen() {
 
   const links = (
     <View style={{ borderTopWidth: 1, borderColor: c.line }}>
-      <LinkRow title={t("chat")} hint={t("chatHint")} onPress={() => router.push(`/groups/${g.id}/chat`)} />
+      <LinkRow
+        title={t("chat")}
+        hint={g.unreadChat > 0 ? `${g.unreadChat} ${t(g.unreadChat === 1 ? "chNewOne" : "chNew")}` : t("chLinkHint")}
+        onPress={() => router.push(`/groups/${g.id}/chat`)}
+      />
       <LinkRow title={t("payments")} hint={t("paymentsShort")} onPress={() => router.push(`/groups/${g.id}/payments`)} />
       <LinkRow title={t("aiLog")} hint={t("aiLogShort")} onPress={() => router.push(`/groups/${g.id}/ai-log`)} last={!g.isOrganizer} />
       {g.isOrganizer && g.status === "FORMING" && <LinkRow title={t("publish")} hint={g.isOpen ? t("isOpenNow") : t("publishHint")} onPress={() => router.push(`/groups/${g.id}/admission`)} />}

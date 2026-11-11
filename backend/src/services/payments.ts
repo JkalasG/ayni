@@ -78,7 +78,7 @@ export async function completeContribution(orderId: string) {
   });
   if (updated.count === 1) {
     // No amount in the group chat: it would reveal a late fee.
-    await postToGroupChat(c.round.groupId, `${c.membership.user.name} pagó su aporte de la ronda ${c.round.number}.`);
+    await postToGroupChat(c.round.groupId, `${c.membership.user.name} pagó su aporte de la ronda ${c.round.number}.`, { type: "paid", name: c.membership.user.name, round: c.round.number });
     await settleInvoice(c.paypalInvoiceId);
     await maybeReleaseRetention(c.membershipId);
   }
@@ -127,7 +127,7 @@ export async function completeInvoice(invoiceId: string) {
     data: { status: "PAID", paidAt: new Date() },
   });
   if (updated.count === 1) {
-    await postToGroupChat(c.round.groupId, `${c.membership.user.name} pagó su aporte de la ronda ${c.round.number}.`);
+    await postToGroupChat(c.round.groupId, `${c.membership.user.name} pagó su aporte de la ronda ${c.round.number}.`, { type: "paid", name: c.membership.user.name, round: c.round.number });
     await maybeReleaseRetention(c.membershipId);
   } else {
     // Paid twice (checkout + invoice): the organizer must refund one of them from PayPal.
@@ -218,7 +218,8 @@ export async function releasePot(roundId: string) {
   await postToGroupChat(
     round.groupId,
     `Pozo de la ronda ${round.number} enviado a ${round.recipient.user.name}: $${formatUSD(net)}` +
-      (held ? ` (garantía retenida: $${formatUSD(held)})` : "")
+      (held ? ` (garantía retenida: $${formatUSD(held)})` : ""),
+    { type: "pot", name: round.recipient.user.name, round: round.number, amountCents: net, heldCents: held }
   );
   if (debtCents) {
     await notify(round.recipient.userId, round.groupId, "pot", "Descuento en tu pozo", `Se descontaron $${formatUSD(debtCents)} por aportes que quedaron impagos; se devolvieron a quienes recibieron de menos.`);
@@ -325,7 +326,7 @@ async function openNextRound(groupId: string, finishedNumber: number) {
   const memberships = await db.membership.findMany({ where: { groupId, retentionHeldCents: { gt: 0 } } });
   for (const m of memberships) await releaseRetention(m.id);
   await db.group.update({ where: { id: groupId }, data: { status: "FINISHED" } });
-  await postToGroupChat(groupId, "¡El pasanaku terminó! Gracias por cumplir. Ayni: hoy por ti, mañana por mí.");
+  await postToGroupChat(groupId, "¡El pasanaku terminó! Gracias por cumplir. Ayni: hoy por ti, mañana por mí.", { type: "finished" });
 }
 
 /** Give back the guarantee as soon as the member has no pending contributions left. */
