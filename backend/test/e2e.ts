@@ -24,6 +24,7 @@ const voids: string[] = [];
 const invoices: { id: string; total: number; cancelled: boolean }[] = [];
 const auths = new Map<string, number>();
 const seenBatches = new Set<string>();
+const FEE_CENTS = 107; // what the fake PayPal reports as its fee on every capture
 let loseNextPayoutResponse = false; // PayPal gets the payout but our request times out (503)
 
 const server = http.createServer((req, res) => {
@@ -48,7 +49,10 @@ const server = http.createServer((req, res) => {
       const o = orders.get(m[1])!;
       const cid = id("CAP");
       captures.push({ id: cid, amount: Math.round(Number(o.amount) * 100), source: "order" });
-      return send(201, { status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: cid, custom_id: o.customId }] } }] });
+      const gross = Math.round(Number(o.amount) * 100);
+      const usd = (c: number) => ({ currency_code: "USD", value: (c / 100).toFixed(2) });
+      const seller_receivable_breakdown = { gross_amount: usd(gross), paypal_fee: usd(FEE_CENTS), net_amount: usd(gross - FEE_CENTS) };
+      return send(201, { status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: cid, custom_id: o.customId, seller_receivable_breakdown }] } }] });
     }
     if ((m = u.match(/^\/v2\/checkout\/orders\/([^/]+)\/authorize$/))) {
       const o = orders.get(m[1])!;
@@ -135,6 +139,7 @@ async function main() {
   const trust = await import(`${B}/src/services/trust`);
   const disputes = await import(`${B}/src/services/disputes`);
   const auth = await import(`${B}/src/auth`);
+  const ledger = await import(`${B}/src/services/ledger`);
 
   // ------------------------------------------------ security: redirect allow-list
   assert.equal(auth.isAllowedRedirect("http://localhost:8081/groups/x"), true);
@@ -267,6 +272,30 @@ async function main() {
 
   const pLast = await trust.trustProfile(last.id);
   assert.equal(pLast.abandoned, 1);
+
+  // ------------------------------------------------ payment history (ledger)
+  const asOrganizer = await ledger.groupLedger(rosa, barrio.id);
+  assert.equal(asOrganizer.totals.inCents, capturedIn, "ledger: charged == what PayPal captured");
+  assert.equal(asOrganizer.totals.outCents, paidOut, "ledger: sent == what PayPal paid out");
+  assert.equal(asOrganizer.guaranteeHeldCents, 0);
+  const paidRows = asOrganizer.entries.filter((e: any) => e.type === "CONTRIBUTION");
+  assert.ok(paidRows.length > 0 && paidRows.every((e: any) => e.feeCents === FEE_CENTS && e.ref), "PayPal fee and reference stored per capture");
+  assert.equal(asOrganizer.totals.feesCents, FEE_CENTS * paidRows.length);
+  assert.equal(asOrganizer.entries.filter((e: any) => e.type === "UNPAID").length, 1);
+  assert.equal(asOrganizer.entries.filter((e: any) => e.type === "GUARANTEE_COVER").length, 1);
+  assert.equal(asOrganizer.entries.filter((e: any) => e.type === "COMPENSATION").length, 1);
+  // A regular member: no unpaid / covered / compensation rows of other people, no references of others.
+  const asMember = await ledger.groupLedger(regular, barrio.id);
+  const others = asMember.entries.filter((e: any) => !e.mine);
+  assert.ok(others.every((e: any) => (e.type === "CONTRIBUTION" || e.type === "POT") && e.ref === null && e.feeCents === null && e.lateFeeCents === 0));
+  assert.ok(asMember.entries.some((e: any) => e.mine && e.ref), "own rows keep their PayPal reference");
+  await assert.rejects(ledger.groupLedger(kusi, barrio.id), /not_a_member/);
+  // "My payments" across groups: only this person's rows, and it adds up with what they paid here.
+  const mineAll = await ledger.myLedger(regular);
+  assert.ok(mineAll.entries.length > 0 && mineAll.entries.every((e: any) => e.mine && e.groupName));
+  const paidHere = asMember.entries.filter((e: any) => e.mine && e.direction === "in").reduce((s: number, e: any) => s + e.amountCents, 0);
+  assert.equal(mineAll.entries.filter((e: any) => e.groupId === barrio.id && e.direction === "in").reduce((s: number, e: any) => s + e.amountCents, 0), paidHere);
+  console.log("✔ payment history: totals match PayPal, fee per capture, private rows stay private");
 
   // ------------------------------------------------ disputes matched to the group
   const ds = await disputes.groupDisputes(barrio.id);

@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, Share, Text, View } from "react-native
 import { Stack, router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
-import { Loading, Notice, Weave } from "@/components/ui";
+import { LinkRow, Loading, Notice, Weave } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar, WovenEmblem } from "@/components/woven-avatar";
@@ -173,6 +173,12 @@ export default function Passport() {
     <StepButton title={t("sharePassport")} fill={c.fucsia.fill} ink={c.onAction} left={<Icon name="compartir" size={20} color={c.onAction} />} onPress={share} />
   );
 
+  const paymentsLink = (
+    <View style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.line }}>
+      <LinkRow title={t("myPayments")} hint={t("myPaymentsShort")} onPress={() => router.push("/payments" as any)} last />
+    </View>
+  );
+
   const top = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}>
       {!wide && router.canGoBack() && (
@@ -206,6 +212,7 @@ export default function Passport() {
                 {hero}
                 {levelCard}
                 {stats}
+                {paymentsLink}
                 {shareBtn}
               </View>
               <View style={{ flex: 1, gap: space(5) }}>
@@ -218,6 +225,7 @@ export default function Passport() {
               {hero}
               {levelCard}
               {stats}
+              {paymentsLink}
               {achievements}
               {shareBtn}
               {history}

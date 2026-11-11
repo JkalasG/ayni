@@ -60,10 +60,12 @@ export async function completeContribution(orderId: string) {
   if (c.status !== "PENDING") return c;
 
   let captureId: string | undefined;
+  let fee: { paypalFeeCents?: number; paypalNetCents?: number } = {};
   try {
     const cap = await paypal.captureOrder(orderId);
     if (cap.status !== "COMPLETED") throw new HttpError(402, `capture_${cap.status}`);
     captureId = cap.captureId;
+    fee = { paypalFeeCents: cap.feeCents, paypalNetCents: cap.netCents };
   } catch (e) {
     // Already captured (e.g. the webhook won the race): confirm with PayPal instead of failing.
     const order = await paypal.getOrder(orderId);
@@ -72,7 +74,7 @@ export async function completeContribution(orderId: string) {
 
   const updated = await db.contribution.updateMany({
     where: { id: c.id, status: "PENDING" },
-    data: { status: "PAID", paidAt: new Date(), paypalCaptureId: captureId },
+    data: { status: "PAID", paidAt: new Date(), paypalCaptureId: captureId, ...fee },
   });
   if (updated.count === 1) {
     // No amount in the group chat: it would reveal a late fee.

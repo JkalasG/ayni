@@ -526,6 +526,7 @@ export default function GroupScreen() {
   const links = (
     <View style={{ borderTopWidth: 1, borderColor: c.line }}>
       <LinkRow title={t("chat")} hint={t("chatHint")} onPress={() => router.push(`/groups/${g.id}/chat`)} />
+      <LinkRow title={t("payments")} hint={t("paymentsShort")} onPress={() => router.push(`/groups/${g.id}/payments`)} />
       <LinkRow title={t("aiLog")} hint={t("aiLogShort")} onPress={() => router.push(`/groups/${g.id}/ai-log`)} last={!g.isOrganizer} />
       {g.isOrganizer && g.status === "FORMING" && <LinkRow title={t("publish")} hint={g.isOpen ? t("isOpenNow") : t("publishHint")} onPress={() => router.push(`/groups/${g.id}/admission`)} />}
       {g.isOrganizer && g.status !== "FORMING" && <LinkRow title={t("checkDisputes")} hint={t("disputesHint")} onPress={() => router.push(`/groups/${g.id}/disputes`)} last />}

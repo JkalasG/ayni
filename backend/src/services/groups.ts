@@ -266,7 +266,8 @@ export async function groupDetail(user: User, groupId: string) {
       })
     : [];
 
-  // PayPal money leaving the pot. Compensations name a debt, so only the organizer and the person involved see them.
+  // PayPal money leaving the pot. Only the pot is public: a compensation names a debt and a guarantee
+  // refund shows how much of it was used, so those are for the organizer and the person involved.
   const payouts = (
     await db.payout.findMany({
       where: { membership: { groupId } },
@@ -275,7 +276,7 @@ export async function groupDetail(user: User, groupId: string) {
       take: 40,
     })
   )
-    .filter((p) => p.kind !== "COMPENSATION" || isOrganizer || p.membershipId === me.id)
+    .filter((p) => p.kind === "POT" || isOrganizer || p.membershipId === me.id)
     .map((p) => ({
       id: p.id,
       kind: p.kind,

@@ -189,6 +189,8 @@ model Contribution {
   status           ContributionStatus @default(PENDING)
   paypalOrderId    String?            @unique
   paypalCaptureId  String?
+  paypalFeeCents   Int? // PayPal's fee on this capture, as PayPal reported it (null = not reported)
+  paypalNetCents   Int? // what reached the platform account after the fee
   paypalInvoiceId  String?            @unique // PayPal invoice sent at the "firm" stage
   recoveredCents   Int                @default(0) // DEFAULTED: part recovered from their guarantee
   compensatedCents Int                @default(0) // DEFAULTED: part later taken from their own pot

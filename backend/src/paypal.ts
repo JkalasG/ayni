@@ -99,14 +99,41 @@ export async function createOrder(p: {
   return { id: order.id, approveUrl: link?.href ?? "" };
 }
 
-export async function captureOrder(orderId: string): Promise<{ status: string; captureId?: string; customId?: string }> {
+/** "12.34" -> 1234. PayPal sends money as decimal strings; we keep integer cents. */
+export function toCents(value: unknown): number | undefined {
+  if (typeof value !== "string" && typeof value !== "number") return undefined;
+  const n = Math.round(Number(value) * 100);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+export type CaptureResult = {
+  status: string;
+  captureId?: string;
+  customId?: string;
+  /** PayPal's own numbers for this capture (seller_receivable_breakdown). Undefined when PayPal does not send them. */
+  feeCents?: number;
+  netCents?: number;
+};
+
+function readCapture(res: any): CaptureResult {
+  const capture = res.purchase_units?.[0]?.payments?.captures?.[0];
+  const b = capture?.seller_receivable_breakdown;
+  return {
+    status: res.status,
+    captureId: capture?.id,
+    customId: capture?.custom_id,
+    feeCents: toCents(b?.paypal_fee?.value),
+    netCents: toCents(b?.net_amount?.value),
+  };
+}
+
+export async function captureOrder(orderId: string): Promise<CaptureResult> {
   const res = await call<any>("captureOrder", `/v2/checkout/orders/${orderId}/capture`, {
     method: "POST",
     idempotencyKey: `capture-${orderId}`,
     body: "{}",
   });
-  const capture = res.purchase_units?.[0]?.payments?.captures?.[0];
-  return { status: res.status, captureId: capture?.id, customId: capture?.custom_id };
+  return readCapture(res);
 }
 
 export async function getOrder(orderId: string): Promise<{ status: string }> {

@@ -28,6 +28,7 @@ import { tickGroup } from "./services/engine";
 import { completeDeposit, exploreOpenGroups, myRequest, requestToJoin } from "./services/admission";
 import { trustProfile } from "./services/trust";
 import { groupDisputes, onDisputeCreated } from "./services/disputes";
+import { groupLedger, myLedger } from "./services/ledger";
 import { chat, summarizeDisputes } from "./ai/agent";
 
 export const router = Router();
@@ -92,6 +93,8 @@ router.patch(
   })
 );
 router.get("/me/profile", ...authed(async (req, res) => res.json(await trustProfile(req.user.id))));
+/** Everything I paid and received through PayPal, across my groups. */
+router.get("/me/payments", ...authed(async (req, res) => res.json(await myLedger(req.user))));
 router.post(
   "/me/push-token",
   ...authed(async (req, res) => {
@@ -197,6 +200,9 @@ router.post(
 );
 
 // ---------------------------------------------------------------- transparency + disputes
+
+/** Payment history of the group, masked for whoever asks (see domain/ledger.ts). */
+router.get("/groups/:id/ledger", ...authed(async (req, res) => res.json(await groupLedger(req.user, req.params.id))));
 
 router.get(
   "/groups/:id/ai-log",

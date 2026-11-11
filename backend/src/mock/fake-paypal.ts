@@ -29,6 +29,13 @@ let seq = 0;
 const RUN = Date.now().toString(36).slice(-4).toUpperCase();
 const sim = (p: string) => `SIM-${p}-${RUN}${(++seq).toString().padStart(4, "0")}`;
 const cents = (v: string) => Math.round(Number(v) * 100);
+/** What PayPal reports next to a capture. The fee is only an illustration (3.49% + $0.49), not PayPal's price list. */
+function breakdown(amount: string) {
+  const gross = cents(amount);
+  const fee = Math.min(gross, Math.round(gross * 0.0349) + 49);
+  const usd = (c: number) => ({ currency_code: "USD", value: (c / 100).toFixed(2) });
+  return { gross_amount: usd(gross), paypal_fee: usd(fee), net_amount: usd(gross - fee) };
+}
 
 function page(title: string, body: string) {
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -115,7 +122,7 @@ export function fakePayPal(webBase: string): Router {
     o.status = "COMPLETED";
     o.captureId = sim("CAPTURE");
     captures.push({ id: o.captureId, amount: o.amount, description: o.description, createdAt: new Date() });
-    res.status(201).json({ id: o.id, status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: o.captureId, status: "COMPLETED", custom_id: o.customId }] } }] });
+    res.status(201).json({ id: o.id, status: "COMPLETED", purchase_units: [{ payments: { captures: [{ id: o.captureId, status: "COMPLETED", custom_id: o.customId, seller_receivable_breakdown: breakdown(o.amount) }] } }] });
   });
   r.post("/v2/checkout/orders/:id/authorize", (req, res) => {
     const o = orders.get(req.params.id);
