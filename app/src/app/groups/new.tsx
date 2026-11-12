@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Text, View } from "react-native";
 import { Stack, router } from "expo-router";
-import { Button, Chips, Field, FormHeader, Notice, Screen, Toggle } from "@/components/ui";
+import { Button, Chips, Field, Notice, P, Screen, Toggle } from "@/components/ui";
+import { FormSection, Guide, TwoCol } from "@/components/guide";
+import { useLayout } from "@/lib/layout";
+import { money } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { errorText } from "@/lib/errors";
@@ -36,6 +39,7 @@ export default function NewGroup() {
   const [tried, setTried] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { c } = useScheme();
+  const { wide } = useLayout();
   const [describe, setDescribe] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [drafted, setDrafted] = useState<{ text: string; tone: "ok" | "error" } | null>(null);
@@ -109,52 +113,123 @@ export default function NewGroup() {
     }
   };
 
+  // What the numbers on the form add up to, said back in plain words while the person types.
+  const okNumbers = !problems.amount && !problems.members;
+  const every = { WEEKLY: t("nwEveryWeek"), BIWEEKLY: t("nwEveryTwoWeeks"), MONTHLY: t("nwEveryMonth") }[frequency];
+  const line = (label: string, value: string, strong = false) => (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 7, borderBottomWidth: 1, borderColor: c.line }}>
+      <Text style={{ flex: 1, fontFamily: fonts.body, fontSize: 14.5, color: c.muted }}>{label}</Text>
+      <Text style={{ fontFamily: strong ? fonts.display : fonts.bodyBold, fontSize: strong ? 18 : 14.5, color: c.ink, fontVariant: ["tabular-nums"] }}>{value}</Text>
+    </View>
+  );
+  const summary = (
+    <SteppedBox fill={c.amarillo.fill + "2E"} stroke={c.amarillo.fill} step={5} style={{ padding: space(5), gap: space(2) }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Icon name="pozo" size={18} color={c.amarillo.text} />
+        <Text accessibilityRole="header" style={{ flex: 1, fontFamily: fonts.display, fontSize: 16.5, color: c.ink }}>
+          {t("nwSummary")}
+        </Text>
+      </View>
+      {okNumbers ? (
+        <>
+          {line(t("nwPot"), money(cents * members), true)}
+          {line(t("nwEach"), `${money(cents)} ${every}`)}
+          {line(t("nwRounds"), `${members} (${t("nwOnePerMember")})`)}
+          {!problems.fee ? line(t("nwLate"), fee > 0 ? `+ ${money(Math.round((cents * fee) / 100))}` : t("nwNone")) : null}
+          {!problems.retention ? line(t("nwHeldFirst"), retention > 0 ? money(Math.round((cents * members * retention) / 100)) : t("nwNone")) : null}
+          <Text style={{ fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.muted, paddingTop: 6 }}>{t("nwSummaryNote")}</Text>
+        </>
+      ) : (
+        <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>{t("nwSummaryEmpty")}</Text>
+      )}
+    </SteppedBox>
+  );
+  const guide = (
+    <Guide
+      title={t("nwGuide")}
+      steps={[
+        { title: t("nwG1"), body: t("nwG1b") },
+        { title: t("nwG2"), body: t("nwG2b") },
+        { title: t("nwG3"), body: t("nwG3b") },
+        { title: t("nwG4"), body: t("nwG4b") },
+      ]}
+      note={t("nwGuideNote")}
+    />
+  );
+  const pair = (left: React.ReactNode, right: React.ReactNode) => (
+    <View style={{ flexDirection: wide ? "row" : "column", gap: space(4) }}>
+      <View style={{ flex: wide ? 1 : undefined }}>{left}</View>
+      <View style={{ flex: wide ? 1 : undefined }}>{right}</View>
+    </View>
+  );
+
   return (
-    <Screen>
+    <Screen width={wide ? 1240 : 640}>
       <Stack.Screen options={{ title: t("create") }} />
-      <FormHeader icon="grupos" hint={t("newHint")} />
-      <SteppedBox fill={c.surface} stroke={c.turquesa.fill} step={5} style={{ padding: space(4), gap: space(3) }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", backgroundColor: c.turquesa.fill }}>
-            <Icon name="rayo" size={18} color={c.onAction} />
+      <P muted>{t("newHint")}</P>
+      <TwoCol
+        side={
+          <>
+            {summary}
+            {guide}
+          </>
+        }
+      >
+        <SteppedBox fill={c.surface} stroke={c.turquesa.fill} step={5} style={{ padding: space(5), gap: space(3) }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", backgroundColor: c.turquesa.fill }}>
+              <Icon name="rayo" size={18} color={c.onAction} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 17, color: c.ink }}>
+                {t("drTitle")}
+              </Text>
+              <Text style={{ fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.muted }}>{t("drHint")}</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 17, color: c.ink }}>
-              {t("drTitle")}
+          <Field label={t("drLabel")} value={describe} onChangeText={setDescribe} placeholder={t("drPlaceholder")} multiline maxLength={1000} />
+          <View style={{ alignSelf: wide ? "flex-start" : "stretch" }}>
+            <Button compact kind="secondary" title={t("drButton")} onPress={fill} loading={drafting} />
+          </View>
+          {drafted ? (
+            <Text accessibilityLiveRegion="polite" style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, lineHeight: 21, color: drafted.tone === "ok" ? c.turquesa.text : c.rojo.text }}>
+              {drafted.text}
             </Text>
-            <Text style={{ fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.muted }}>{t("drHint")}</Text>
-          </View>
-        </View>
-        <Field label={t("drLabel")} value={describe} onChangeText={setDescribe} placeholder={t("drPlaceholder")} multiline maxLength={1000} />
-        <Button compact kind="secondary" title={t("drButton")} onPress={fill} loading={drafting} />
-        {drafted ? (
-          <Text accessibilityLiveRegion="polite" style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, lineHeight: 21, color: drafted.tone === "ok" ? c.turquesa.text : c.rojo.text }}>
-            {drafted.text}
-          </Text>
-        ) : null}
-      </SteppedBox>
-      <Field label={t("name")} value={name} onChangeText={setName} placeholder="Pasanaku de la familia" maxLength={60} error={show(problems.name, false)} />
-      <Chips label={t("groupCountry")} value={country} onChange={setCountry} options={COUNTRIES.map((v) => ({ value: v, label: countryName(v, lang) }))} />
-      <Field label={t("contribution")} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" error={show(problems.amount)} />
-      <Chips
-        label={t("frequency")}
-        value={frequency}
-        onChange={setFrequency}
-        options={(["WEEKLY", "BIWEEKLY", "MONTHLY"] as Freq[]).map((v) => ({ value: v, label: t(v) }))}
-      />
-      <Chips
-        label={t("orderMethod")}
-        value={orderMethod}
-        onChange={setOrderMethod}
-        options={(["AI", "LOTTERY", "ORGANIZER"] as Method[]).map((v) => ({ value: v, label: t(v) }))}
-      />
-      <Field label={t("maxMembers")} value={maxMembers} onChangeText={setMaxMembers} keyboardType="number-pad" error={show(problems.members)} />
-      <Field label={t("lateFee")} value={lateFee} onChangeText={setLateFee} keyboardType="number-pad" error={show(problems.fee)} />
-      <Field label={t("maxRetention")} value={maxRetention} onChangeText={setMaxRetention} keyboardType="number-pad" error={show(problems.retention)} />
-      <Toggle label={t("demoMode")} value={demoMode} onChange={setDemoMode} />
-      <AdmissionForm value={admission} onChange={setAdmission} />
-      {error && <Notice tone="error">{error}</Notice>}
-      <Button title={t("save")} onPress={submit} loading={busy} />
+          ) : null}
+        </SteppedBox>
+
+        <FormSection n={1} title={t("nwS1")} hint={t("nwS1h")}>
+          <Field label={t("name")} value={name} onChangeText={setName} placeholder="Pasanaku de la familia" maxLength={60} error={show(problems.name, false)} />
+          <Chips label={t("groupCountry")} value={country} onChange={setCountry} options={COUNTRIES.map((v) => ({ value: v, label: countryName(v, lang) }))} />
+        </FormSection>
+
+        <FormSection n={2} title={t("nwS2")} hint={t("nwS2h")}>
+          {pair(
+            <Field label={t("contribution")} hint={t("nwAmountHint")} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" error={show(problems.amount)} />,
+            <Field label={t("maxMembers")} hint={t("nwMembersHint")} value={maxMembers} onChangeText={setMaxMembers} keyboardType="number-pad" error={show(problems.members)} />
+          )}
+          <Chips label={t("frequency")} value={frequency} onChange={setFrequency} options={(["WEEKLY", "BIWEEKLY", "MONTHLY"] as Freq[]).map((v) => ({ value: v, label: t(v) }))} />
+        </FormSection>
+
+        <FormSection n={3} title={t("nwS3")} hint={t("nwS3h")}>
+          <Chips label={t("orderMethod")} value={orderMethod} onChange={setOrderMethod} options={(["AI", "LOTTERY", "ORGANIZER"] as Method[]).map((v) => ({ value: v, label: t(v) }))} />
+          <Text style={{ fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.muted, marginTop: -space(2) }}>{t(`nwOrder_${orderMethod}` as any)}</Text>
+          {pair(
+            <Field label={t("lateFee")} hint={t("nwFeeHint")} value={lateFee} onChangeText={setLateFee} keyboardType="number-pad" error={show(problems.fee)} />,
+            <Field label={t("maxRetention")} hint={t("nwRetentionHint")} value={maxRetention} onChangeText={setMaxRetention} keyboardType="number-pad" error={show(problems.retention)} />
+          )}
+        </FormSection>
+
+        <FormSection n={4} title={t("nwS4")} hint={t("nwS4h")}>
+          <Toggle label={t("demoMode")} hint={t("nwDemoHint")} value={demoMode} onChange={setDemoMode} />
+          <AdmissionForm value={admission} onChange={setAdmission} />
+        </FormSection>
+
+        {error && <Notice tone="error">{error}</Notice>}
+        {tried && !valid ? <Notice tone="error">{t("nwFix")}</Notice> : null}
+        <Button title={t("save")} onPress={submit} loading={busy} />
+        <Text style={{ fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.muted, textAlign: wide ? "left" : "center" }}>{t("nwAfter")}</Text>
+      </TwoCol>
     </Screen>
   );
 }
