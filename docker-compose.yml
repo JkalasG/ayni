@@ -1,0 +1,82 @@
+# Ayni on one server:  db (Postgres)  ·  api (Node)  ·  web (Caddy: the web app, /api and HTTPS)
+#
+#   cp .env.docker.example .env      # fill it in
+#   docker compose up -d --build
+#   docker compose exec api npm run db:seed     # once: demo members and circles
+#
+# Full guide: DESPLIEGUE.md
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ayni
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ayni
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ayni -d ayni"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_MODE: live
+      PORT: 4000
+      DATABASE_URL: postgresql://ayni:${POSTGRES_PASSWORD}@db:5432/ayni
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      PUBLIC_API_URL: https://${DOMAIN:?set DOMAIN in .env}/api
+      APP_WEB_URL: https://${DOMAIN}
+      APP_SCHEME: ayni
+      ALLOW_EXPO_GO: ${ALLOW_EXPO_GO:-false}
+      ENABLE_DEMO_LOGIN: ${ENABLE_DEMO_LOGIN:-true}
+      DEMO_MEMBER_EMAILS: ${DEMO_MEMBER_EMAILS:-}
+      DEMO_MEMBER_PASSWORD: ${DEMO_MEMBER_PASSWORD:-}
+      ENGINE_INTERVAL_MS: ${ENGINE_INTERVAL_MS:-20000}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:?set PAYPAL_CLIENT_ID in .env}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:?set PAYPAL_CLIENT_SECRET in .env}
+      PAYPAL_WEBHOOK_ID: ${PAYPAL_WEBHOOK_ID:-}
+      PAYPAL_API_BASE: ${PAYPAL_API_BASE:-https://api-m.sandbox.paypal.com}
+      PAYPAL_WEB_BASE: ${PAYPAL_WEB_BASE:-https://www.sandbox.paypal.com}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  web:
+    build:
+      context: ./app
+      args:
+        EXPO_PUBLIC_API_URL: https://${DOMAIN}/api
+        EXPO_PUBLIC_BRYNTUM_LICENSE: ${EXPO_PUBLIC_BRYNTUM_LICENSE:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data       # the HTTPS certificates: keep this volume
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
