@@ -38,6 +38,9 @@ import { listClaims, openClaim, refundClaim, rejectClaim } from "./services/clai
 import { groupReconciliation, reconcileNow } from "./services/reconcile";
 import { swapTurnsAsOrganizer } from "./services/reschedule";
 import { summarizeDisputes } from "./ai/agent";
+import { groupBriefing, runBriefingStep } from "./ai/briefing";
+import { draftGroup } from "./ai/draft";
+import { translateMessages } from "./ai/translate";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
 export const router = Router();
@@ -163,6 +166,11 @@ const admissionSchema = z.object({
   requireDeposit: z.boolean().default(true),
 });
 
+/** The person describes the pasanaku in their own words; the assistant proposes the form (see ai/draft.ts). Creates nothing. */
+router.post(
+  "/groups/draft",
+  ...authed(async (req, res) => res.json(await draftGroup(req.user, z.object({ text: z.string().min(3).max(1000) }).parse(req.body).text)))
+);
 router.get("/groups", ...authed(async (req, res) => res.json(await myGroups(req.user))));
 router.post(
   "/groups",
@@ -250,6 +258,17 @@ router.post("/groups/:id/reconciliation", ...authed(async (req, res) => res.json
 router.get("/groups/:id/ledger", ...authed(async (req, res) => res.json(await groupLedger(req.user, req.params.id))));
 /** Guarantee timeline: the organizer sees every member, a member only their own (see domain/guarantee.ts). */
 router.get("/groups/:id/guarantee", ...authed(async (req, res) => res.json(await groupGuarantee(req.user, req.params.id))));
+
+/** The assistant's reading of the group for whoever asks, with the steps it recommends (see ai/briefing.ts). */
+router.get("/groups/:id/assistant", ...authed(async (req, res) => res.json(await groupBriefing(req.user, req.params.id))));
+/** A step the assistant runs itself when the organizer taps it: a reminder it writes, or a PayPal invoice. */
+router.post(
+  "/groups/:id/assistant/run",
+  ...authed(async (req, res) => {
+    const step = z.object({ type: z.enum(["nudge", "invoice"]), contributionId: z.string().max(40) }).parse(req.body);
+    res.json(await runBriefingStep(req.user, req.params.id, step));
+  })
+);
 
 router.get(
   "/groups/:id/ai-log",
@@ -408,6 +427,14 @@ router.post(
   ...authed(async (req, res) => {
     const { text, toAssistant } = z.object({ text: z.string().min(1).max(4000), toAssistant: z.boolean().optional() }).parse(req.body);
     res.json(await sendMessage(req.user, req.params.id, text, toAssistant === true));
+  })
+);
+/** The group's messages in the reader's language (see ai/translate.ts). Returns only the ones that needed translating. */
+router.post(
+  "/groups/:id/chat/translate",
+  ...authed(async (req, res) => {
+    const { ids, lang } = z.object({ ids: z.array(z.string().max(40)).max(60), lang: z.enum(["es", "en"]) }).parse(req.body);
+    res.json(await translateMessages(req.user, req.params.id, ids, lang));
   })
 );
 router.post(
