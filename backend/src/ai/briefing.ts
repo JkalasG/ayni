@@ -270,10 +270,17 @@ export async function groupBriefing(user: User, groupId: string): Promise<Briefi
   const key = `${groupId}:${user.id}:${user.locale}`;
   const hit = cache.get(key);
   if (hit && hit.hash === hash) return hit.value;
-  const value = compose(user, groupId, g).catch((e) => {
-    cache.delete(key);
-    throw e;
-  });
+  const value = compose(user, groupId, g)
+    .then((b) => {
+      // A model that failed for a moment (busy, rate limit) must not leave its fixed-rules answer cached until the
+      // group changes: the next request asks the model again.
+      if (client && b.source === "fallback") cache.delete(key);
+      return b;
+    })
+    .catch((e) => {
+      cache.delete(key);
+      throw e;
+    });
   cache.set(key, { hash, value });
   return value;
 }
