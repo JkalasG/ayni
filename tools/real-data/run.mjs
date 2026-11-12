@@ -152,6 +152,8 @@ async function approveOnPayPal(approveUrl, email, password, label) {
   const limit = Date.now() + (HEADFUL ? 5 * 60_000 : 90_000);
   let typedEmail = false;
   let typedPassword = false;
+  let clickedLogin = false;
+  let passwordAt = 0;
   try {
     await page.goto(approveUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
     while (Date.now() < limit) {
@@ -191,13 +193,27 @@ async function approveOnPayPal(approveUrl, email, password, label) {
         const next = await page.$(NEXT_SEL);
         if (next) await next.click().catch(() => {});
         else await page.keyboard.press("Enter");
-      } else if (step.act === "password" && !typedPassword) {
-        await page.click("input[type=password]").catch(() => {});
-        await page.keyboard.type(password, { delay: 25 });
-        typedPassword = true;
-        const go = await page.$(LOGIN_SEL);
-        if (go) await go.click().catch(() => {});
-        else await page.keyboard.press("Enter");
+      } else if (step.act === "password") {
+        // type once; if the page is still asking after a few seconds, press Log In again
+        if (!typedPassword) {
+          await page.click("input[type=password]").catch(() => {});
+          await page.keyboard.type(password, { delay: 25 });
+          typedPassword = true;
+          passwordAt = Date.now();
+        }
+        if (!clickedLogin || Date.now() - passwordAt > 8000) {
+          clickedLogin = true;
+          passwordAt = Date.now();
+          const clicked = await page
+            .evaluate(() => {
+              const visible = (el) => !!el && el.offsetParent !== null;
+              const b = [...document.querySelectorAll("button, input[type=submit]")].filter(visible).find((x) => /^(log in|login|iniciar sesi.n)$/i.test((x.innerText || x.value || "").trim()));
+              b?.click();
+              return !!b;
+            })
+            .catch(() => false);
+          if (!clicked) await page.keyboard.press("Enter");
+        }
       } else if (step.act === "button") {
         await page
           .evaluate((text) => {
