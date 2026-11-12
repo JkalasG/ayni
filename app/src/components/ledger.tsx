@@ -105,12 +105,13 @@ export function LedgerList({ entries, locale, personal, onReport }: { entries: L
 function LedgerTable({ entries, locale, personal, onReport }: { entries: LedgerEntry[]; locale: string; personal?: boolean; onReport?: (contributionId: string) => void }) {
   const { c } = useScheme();
   const { t } = useI18n();
-  const W = { date: 100, concept: 236, status: 122, ref: 150, fee: 80, amount: 106 };
+  // the fixed columns must leave room for the flexible one (member / circle) on a 1280 px screen with the sidebar
+  const W = { date: 84, concept: 176, status: 112, ref: 142, fee: 60, amount: 96 };
   const head = { fontFamily: fonts.bodyBold, fontSize: 13, color: c.muted, letterSpacing: 0.3, textTransform: "uppercase" as const };
   const cols = (cells: [number | undefined, ReactNode, "left" | "right"][], bg?: string, border?: boolean) => (
     <View style={{ flexDirection: "row", alignItems: "center", gap: space(4), paddingHorizontal: space(4), paddingVertical: space(3), backgroundColor: bg, borderBottomWidth: border ? 1 : 0, borderColor: c.line }}>
       {cells.map(([w, node, align], i) => (
-        <View key={i} style={{ width: w, flex: w ? undefined : 1, minWidth: 0, alignItems: align === "right" ? "flex-end" : "flex-start" }}>
+        <View key={i} style={{ width: w, flex: w ? undefined : 1, minWidth: w ? 0 : 96, overflow: "hidden", alignItems: align === "right" ? "flex-end" : "flex-start" }}>
           {node}
         </View>
       ))}
@@ -120,13 +121,13 @@ function LedgerTable({ entries, locale, personal, onReport }: { entries: LedgerE
     <SteppedBox fill={c.surface} stroke={c.line} step={5} style={{ overflow: "hidden" }}>
       {cols(
         [
-          [W.date, <Text style={head}>{t("lgColDate")}</Text>, "left"],
-          [W.concept, <Text style={head}>{t("lgColConcept")}</Text>, "left"],
-          [undefined, <Text style={head}>{personal ? t("lgColGroup") : t("lgColMember")}</Text>, "left"],
-          [W.status, <Text style={head}>{t("lgColStatus")}</Text>, "left"],
-          [W.ref, <Text style={head}>{t("lgColRef")}</Text>, "left"],
-          [W.fee, <Text style={head}>{t("lgColFee")}</Text>, "right"],
-          [W.amount, <Text style={head}>{t("lgColAmount")}</Text>, "right"],
+          [W.date, <Text numberOfLines={1} style={head}>{t("lgColDate")}</Text>, "left"],
+          [W.concept, <Text numberOfLines={1} style={head}>{t("lgColConcept")}</Text>, "left"],
+          [undefined, <Text numberOfLines={1} style={head}>{personal ? t("lgColGroup") : t("lgColMember")}</Text>, "left"],
+          [W.status, <Text numberOfLines={1} style={head}>{t("lgColStatus")}</Text>, "left"],
+          [W.ref, <Text numberOfLines={1} style={head}>{t("lgColRef")}</Text>, "left"],
+          [W.fee, <Text numberOfLines={1} style={head}>{t("lgColFee")}</Text>, "right"],
+          [W.amount, <Text numberOfLines={1} style={head}>{t("lgColAmount")}</Text>, "right"],
         ],
         c.surfaceAlt,
         true
