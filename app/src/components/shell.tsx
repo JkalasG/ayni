@@ -158,7 +158,7 @@ function Sidebar() {
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
-        minHeight: 46,
+        minHeight: 42,
         paddingHorizontal: 14,
         backgroundColor: active ? "rgba(255,255,255,0.10)" : hovered ? "rgba(255,255,255,0.05)" : "transparent",
         borderLeftWidth: 3,
@@ -177,10 +177,10 @@ function Sidebar() {
 
   return (
     <View style={{ width: 280, flexDirection: "row", backgroundColor: loom }}>
-      <View style={{ flex: 1, paddingVertical: space(7), paddingHorizontal: space(3), gap: space(6) }}>
+      <View style={{ flex: 1, paddingTop: space(5), paddingBottom: space(3), paddingHorizontal: space(3), gap: space(4) }}>
         <Pressable onPress={() => router.navigate("/groups")} accessibilityRole="link" accessibilityLabel="Ayni" style={{ paddingHorizontal: 14 }}>
-          <Logo size={40} tone="dark" />
-          <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: soft, marginTop: 6 }}>{t("ayniMotto")}</Text>
+          <Logo size={34} tone="dark" />
+          <Text style={{ fontFamily: fonts.body, fontSize: 13, color: soft, marginTop: 4 }}>{t("ayniMotto")}</Text>
         </Pressable>
 
         <View style={{ gap: 2 }}>
@@ -189,8 +189,14 @@ function Sidebar() {
           ))}
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 2 }}>
-          <Text style={{ color: "rgba(247,243,234,0.55)", fontFamily: fonts.bodyBold, fontSize: 13, paddingHorizontal: 14, marginBottom: 6 }}>{t("activeCircles")}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 14, borderTopWidth: 1, borderColor: "rgba(247,243,234,0.14)", paddingTop: space(3) }}>
+          <Text style={{ flex: 1, color: "rgba(247,243,234,0.55)", fontFamily: fonts.bodyBold, fontSize: 13 }}>{t("activeCircles")}</Text>
+          <Pressable onPress={() => router.navigate("/groups/new")} accessibilityRole="link" accessibilityLabel={t("create")} style={({ hovered }: any) => ({ minHeight: 32, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: hovered ? "rgba(255,210,63,0.16)" : "rgba(255,210,63,0.08)" })}>
+            <Icon name="mas" size={13} color="#FFD23F" />
+            <Text style={{ color: "#FFD23F", fontFamily: fonts.bodyBold, fontSize: 13 }}>{t("sbNew")}</Text>
+          </Pressable>
+        </View>
+        <ScrollView style={{ flex: 1, marginTop: -space(2) }} showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 1 }}>
           {groups.map((g) => {
             const active = path.startsWith(`/groups/${g.id}`);
             return (
@@ -200,7 +206,7 @@ function Sidebar() {
                 accessibilityState={{ selected: active }}
                 onPress={() => router.push(`/groups/${g.id}`)}
                 style={({ hovered }: any) => ({
-                  minHeight: 42,
+                  minHeight: 38,
                   paddingHorizontal: 14,
                   flexDirection: "row",
                   alignItems: "center",
@@ -215,15 +221,13 @@ function Sidebar() {
               </Pressable>
             );
           })}
-          <Pressable onPress={() => router.navigate("/groups/new")} style={{ minHeight: 42, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 10 }} accessibilityRole="link">
-            <Icon name="mas" size={16} color="#FFD23F" />
-            <Text style={{ color: "#FFD23F", fontFamily: fonts.bodyBold, fontSize: 14.5 }}>{t("create")}</Text>
-          </Pressable>
+          {groups.length === 0 ? <Text style={{ color: soft, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, paddingHorizontal: 14 }}>{t("sbEmpty")}</Text> : null}
         </ScrollView>
 
-        <View style={{ borderTopWidth: 1, borderColor: "rgba(247,243,234,0.14)", paddingTop: space(4), paddingHorizontal: 14, gap: 12 }}>
-          <Text style={{ color: light, fontFamily: fonts.bodyBold, fontSize: 15 }}>{me?.name}</Text>
-          <View accessibilityRole="radiogroup" accessibilityLabel={t("schemeLabel")} style={{ flexDirection: "row", gap: 4 }}>
+        <View style={{ borderTopWidth: 1, borderColor: "rgba(247,243,234,0.14)", paddingTop: space(3), paddingHorizontal: 14, gap: 4 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text numberOfLines={1} style={{ flex: 1, color: light, fontFamily: fonts.bodyBold, fontSize: 14.5 }}>{me?.name}</Text>
+          <View accessibilityRole="radiogroup" accessibilityLabel={t("schemeLabel")} style={{ flexDirection: "row", gap: 3 }}>
             {SCHEMES.map((s) => {
               const on = pref === s.pref;
               return (
@@ -233,19 +237,20 @@ function Sidebar() {
                   accessibilityLabel={t(s.label)}
                   accessibilityState={{ checked: on }}
                   onPress={() => setPref(s.pref)}
-                  style={{ width: 44, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: on ? "#FF4A97" : "rgba(255,255,255,0.06)" }}
+                  style={{ width: 34, height: 32, alignItems: "center", justifyContent: "center", backgroundColor: on ? "#FF4A97" : "rgba(255,255,255,0.06)" }}
                 >
-                  <Icon name={s.icon} size={18} color={on ? "#0B0E27" : soft} />
+                  <Icon name={s.icon} size={15} color={on ? "#0B0E27" : soft} />
                 </Pressable>
               );
             })}
           </View>
-          <View style={{ flexDirection: "row", gap: 18 }}>
-            <Pressable onPress={() => setLang(lang === "es" ? "en" : "es")} accessibilityRole="button" accessibilityLabel={t("languageLabel")} style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 8 }}>
+          </View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Pressable onPress={() => setLang(lang === "es" ? "en" : "es")} accessibilityRole="button" accessibilityLabel={t("languageLabel")} style={{ minHeight: 36, flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Icon name="idioma" size={16} color={soft} />
               <Text style={{ color: soft, fontFamily: fonts.body, fontSize: 14 }}>{t("language")}</Text>
             </Pressable>
-            <Pressable onPress={logout} accessibilityRole="button" style={{ minHeight: 44, justifyContent: "center" }}>
+            <Pressable onPress={logout} accessibilityRole="button" style={{ minHeight: 36, justifyContent: "center" }}>
               <Text style={{ color: soft, fontFamily: fonts.body, fontSize: 14 }}>{t("logout")}</Text>
             </Pressable>
           </View>
