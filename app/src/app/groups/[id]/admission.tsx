@@ -6,11 +6,15 @@ import { AdmissionForm, admissionPayload, fromGroup, type AdmissionValues } from
 import { useI18n } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { errorText } from "@/lib/errors";
+import { P } from "@/components/ui";
+import { Guide, TwoCol } from "@/components/guide";
+import { useLayout } from "@/lib/layout";
 
 /** Organizer: publish the pasanaku as open and set who can get in. */
 export default function AdmissionSettings() {
   useScheme(); // re-render when the color mode changes
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { wide } = useLayout();
   const { t } = useI18n();
   const [value, setValue] = useState<AdmissionValues | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,11 +46,14 @@ export default function AdmissionSettings() {
   };
 
   return (
-    <Screen>
+    <Screen width={wide ? 1240 : 640}>
       {title}
+      <P muted>{t("adHint")}</P>
+      <TwoCol side={<Guide title={t("adGuide")} steps={[{ title: t("adG1"), body: t("adG1b") }, { title: t("adG2"), body: t("adG2b") }, { title: t("adG3"), body: t("adG3b") }, { title: t("adG4"), body: t("adG4b") }]} note={t("adNote")} />}>
       <AdmissionForm value={value} onChange={setValue} />
       {msg && <Notice tone={msg.ok ? "ok" : "error"}>{msg.text}</Notice>}
       <Button title={t("saveSettings")} onPress={save} loading={busy} />
+      </TwoCol>
     </Screen>
   );
 }

@@ -5,6 +5,8 @@ import { Badge, Card, H2, Loading, Notice, P, Screen } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { api, ApiError } from "@/lib/api";
 import { colors } from "@/lib/theme";
+import { Guide, TwoCol } from "@/components/guide";
+import { useLayout } from "@/lib/layout";
 
 type Dispute = { id: string; reason: string; status: string; amount: string; memberName: string; round: number | null; createdAt: string };
 
@@ -12,6 +14,7 @@ type Dispute = { id: string; reason: string; status: string; amount: string; mem
 export default function Disputes() {
   useScheme(); // re-render when the color mode changes
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { wide } = useLayout();
   const { t, lang } = useI18n();
   const [data, setData] = useState<{ disputes: Dispute[]; summary: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,8 +30,10 @@ export default function Disputes() {
   if (error) return <Screen><Stack.Screen options={{ title: t("disputes") }} /><Notice tone="error">{error === "organizer_only" ? t("organizerOnly") : t("loadFailed")}</Notice></Screen>;
   if (!data) return <><Stack.Screen options={{ title: t("disputes") }} /><Loading /></>;
   return (
-    <Screen>
+    <Screen width={wide ? 1240 : 640}>
       <Stack.Screen options={{ title: t("disputes") }} />
+      <P muted>{t("dpHint")}</P>
+      <TwoCol side={<Guide title={t("dpGuide")} steps={[{ title: t("dpG1"), body: t("dpG1b") }, { title: t("dpG2"), body: t("dpG2b") }, { title: t("dpG3"), body: t("dpG3b") }]} note={t("dpNote")} />}>
       <Card style={{ borderColor: colors.primary }}>
         <P>{data.summary}</P>
       </Card>
@@ -47,6 +52,7 @@ export default function Disputes() {
           </P>
         </Card>
       ))}
+      </TwoCol>
     </Screen>
   );
 }

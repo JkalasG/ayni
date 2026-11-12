@@ -10,6 +10,8 @@ import { useI18n, type Key } from "@/lib/i18n";
 import { useScheme } from "@/lib/scheme";
 import { api, ApiError, money } from "@/lib/api";
 import { fonts } from "@/lib/theme";
+import { Guide, TwoCol } from "@/components/guide";
+import { useLayout } from "@/lib/layout";
 
 type Claim = {
   id: string;
@@ -40,6 +42,7 @@ const ERRORS: Record<string, Key> = {
 export default function Claims() {
   const { c } = useScheme();
   const { id, new: newFor } = useLocalSearchParams<{ id: string; new?: string }>();
+  const { wide } = useLayout();
   const { t, lang } = useI18n();
   const [data, setData] = useState<{ isOrganizer: boolean; claims: Claim[] } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -108,12 +111,13 @@ export default function Claims() {
   ) : null;
 
   return (
-    <Screen>
+    <Screen width={wide ? 1240 : 640}>
       {title}
       <P muted>{data.isOrganizer ? t("clHintOrganizer") : t("clHint")}</P>
+      <TwoCol side={<Guide title={t("clGuide")} steps={[{ title: t("clG1"), body: t("clG1b") }, { title: t("clG2"), body: t("clG2b") }, { title: t("clG3"), body: t("clG3b") }, { title: t("clG4"), body: t("clG4b") }]} note={t("clNote")} />}>
       {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
       {form}
-      {data.claims.length === 0 && !newFor && <Notice>{t("clEmpty")}</Notice>}
+      {data.claims.length === 0 && !newFor && <Notice>{data.isOrganizer ? t("clEmpty") : t("clEmptyMember")}</Notice>}
       {data.claims.map((cl) => (
         <Card key={cl.id}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -180,6 +184,7 @@ export default function Claims() {
           ) : null}
         </Card>
       ))}
+      </TwoCol>
     </Screen>
   );
 }
