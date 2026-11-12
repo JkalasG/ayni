@@ -23,10 +23,10 @@ const TABS: { key: string; href: string; icon: IconName; label: Key; match: (p: 
 ];
 
 /** Screens a signed-out person may see; every other screen sends them back to the welcome page. */
-const PUBLIC = (p: string) => p === "/" || p.startsWith("/auth") || p.startsWith("/demo");
+const PUBLIC = (p: string) => p === "/" || p.startsWith("/auth") || p.startsWith("/demo") || p.startsWith("/paypal-done");
 
 /** Screens that own the whole viewport (welcome, PayPal return, chat with its composer). */
-const NO_NAV = (p: string) => p === "/" || p.startsWith("/auth") || p.startsWith("/demo") || p.endsWith("/chat");
+const NO_NAV = (p: string) => p === "/" || p.startsWith("/auth") || p.startsWith("/demo") || p.startsWith("/paypal-done") || p.endsWith("/chat");
 
 function useUnread() {
   const path = usePathname();

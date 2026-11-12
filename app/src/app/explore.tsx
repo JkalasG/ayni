@@ -15,7 +15,7 @@ import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { api, money } from "@/lib/api";
 import { errorText } from "@/lib/errors";
-import { openPayPal, returnUrl } from "@/lib/pay";
+import { runPayPal } from "@/lib/pay";
 import { PayPalWordmark } from "@/components/paypal";
 import { fonts, space, type Palette } from "@/lib/theme";
 
@@ -139,17 +139,19 @@ export default function Explore() {
     setBusy(true);
     setBanner(null);
     try {
-      const redirect = returnUrl("explore");
-      const res = await api<{ request: { status: string }; approveUrl: string | null }>(`/groups/${g.id}/requests`, {
-        body: { message: message.trim() || undefined, redirect },
+      type Made = { request: { status: string }; approveUrl: string | null };
+      const box: { made: Made | null } = { made: null };
+      // the request is made inside the PayPal trip: the small window opens first and the server answers while it waits
+      const r = await runPayPal("PayPal…", "explore", async (redirect) => {
+        box.made = await api<Made>(`/groups/${g.id}/requests`, { body: { message: message.trim() || undefined, redirect } });
+        return box.made.approveUrl;
       });
-      if (res.approveUrl) {
-        const r = await openPayPal(res.approveUrl, redirect);
+      if (box.made?.approveUrl) {
         if (r === "deposit") setBanner(t("depositDone"));
         else if (r === "cancelled") setBanner(t("paymentCancel"), "info");
         else if (r === "error") setBanner(t("paymentError"), "error");
-      } else {
-        setBanner(t(`req_${res.request.status}` as Key));
+      } else if (box.made) {
+        setBanner(t(`req_${box.made.request.status}` as Key));
       }
       setMessage("");
       setOpen(null);

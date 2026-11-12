@@ -6,6 +6,7 @@ import { API_URL, api, ApiError } from "./api";
 import { getToken, setToken } from "./session";
 import { useI18n } from "./i18n";
 import { registerForPush, unregisterPush } from "./push";
+import { runInPopup } from "./popup";
 
 export type Me = { id: string; name: string; email: string; locale: "es" | "en" };
 
@@ -63,9 +64,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithPayPal = useCallback(async () => {
     if (Platform.OS === "web") {
-      // full-page redirect; /auth picks up the token
-      const redirect = `${window.location.origin}/auth`;
-      window.location.href = `${API_URL}/auth/paypal/start?redirect=${encodeURIComponent(redirect)}`;
+      // a small window over the app; its landing page hands the token back and closes
+      const r = await runInPopup("PayPal…", async (redirect) => `${API_URL}/auth/paypal/start?redirect=${encodeURIComponent(redirect)}`);
+      if (r === "blocked") {
+        // the browser did not allow the window: full-page redirect, /auth picks up the token
+        window.location.href = `${API_URL}/auth/paypal/start?redirect=${encodeURIComponent(`${window.location.origin}/auth`)}`;
+        return;
+      }
+      if (r?.token) await acceptToken(r.token);
+      else if (r?.error) throw new Error(r.error);
       return;
     }
     const redirect = Linking.createURL("auth");
