@@ -1,0 +1,10 @@
+{
+  "name": "ayni-video",
+  "private": true,
+  "type": "module",
+  "description": "Builds the Ayni demo video: records the real app, synthesizes the music and sound effects, narrates and edits it.",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "puppeteer-core": "^24.0.0"
+  }
+}

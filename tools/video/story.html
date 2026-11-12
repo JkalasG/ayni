@@ -1,0 +1,430 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ayni story</title>
+<style>
+  html, body { margin: 0; background: #FFF6EC; overflow: hidden; }
+  #root { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform: scale(1.125); transform-origin: 0 0; overflow: hidden; }
+  #stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; }
+  #cap {
+    position: absolute; left: 0; right: 0; bottom: 26px; text-align: center; pointer-events: none;
+    font: 800 36px/1.15 "Unbounded", "Segoe UI", sans-serif; color: #1A1A3A; letter-spacing: -0.5px;
+  }
+  #cap span {
+    display: inline-block; max-width: 1060px; padding: 12px 26px; background: rgba(255, 246, 236, 0.92); border: 3px solid #1A1A3A;
+    box-shadow: 6px 6px 0 #D4106B; opacity: 0; transform: translateY(14px);
+  }
+  .sc { opacity: 0; }
+  text { font-family: "Unbounded", "Segoe UI", sans-serif; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;900&family=Figtree:wght@400;700&display=swap">
+</head>
+<body>
+<div id="root">
+<svg id="stage" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#CFE3EE"/><stop offset="0.55" stop-color="#FFF1DE"/><stop offset="1" stop-color="#FFD2AE"/>
+    </linearGradient>
+    <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A2F63"/><stop offset="1" stop-color="#8C8FB8"/>
+    </linearGradient>
+    <clipPath id="sunclip"><circle cx="1040" cy="170" r="74"/></clipPath>
+
+    <!-- the four neighbours of the app, one symbol each -->
+    <symbol id="elder" viewBox="22 0 66 190">
+      <rect x="36" y="178" width="14" height="8" rx="3" fill="#2B2B3A"/><rect x="60" y="178" width="14" height="8" rx="3" fill="#2B2B3A"/>
+      <path d="M37 118H73L80 180H30Z" fill="#4A3A6B"/>
+      <path d="M35 74Q55 66 75 74L77 122H33Z" fill="#2AA5BA"/>
+      <path d="M35 75Q55 67 75 75L72 86Q55 80 38 86Z" fill="#E8287A"/><path d="M37 82Q55 76 73 82L72 85Q55 79 38 85Z" fill="#FFD23F"/>
+      <path d="M37 78L44 104L52 98" stroke="#2AA5BA" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M73 78L66 104L58 98" stroke="#2AA5BA" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <rect x="49" y="84" width="12" height="16" rx="2" fill="#1A1A3A"/><rect x="51" y="86" width="8" height="10" fill="#29C6E0"/>
+      <circle cx="51" cy="98" r="4.5" fill="#8D5A3B"/><circle cx="59" cy="98" r="4.5" fill="#8D5A3B"/>
+      <circle cx="55" cy="34" r="7" fill="#CFC8C0"/><circle cx="55" cy="52" r="14" fill="#8D5A3B"/>
+      <path d="M41 51A14 14 0 0 1 69 51Q62 43 55 44Q48 43 41 51Z" fill="#CFC8C0"/>
+      <circle cx="50" cy="55" r="1.6" fill="#1A1A3A"/><circle cx="60" cy="55" r="1.6" fill="#1A1A3A"/>
+    </symbol>
+    <symbol id="boy" viewBox="100 14 66 176">
+      <rect x="112" y="178" width="16" height="8" rx="3" fill="#F2F2F2"/><rect x="129" y="178" width="16" height="8" rx="3" fill="#F2F2F2"/>
+      <rect x="114" y="120" width="12" height="60" fill="#2E3A6E"/><rect x="130" y="120" width="12" height="60" fill="#2E3A6E"/>
+      <path d="M110 72Q128 62 146 72L148 124H108Z" fill="#F07D1A"/>
+      <path d="M112 76L108 102L111 116" stroke="#F07D1A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M144 76L154 60L155 46" stroke="#F07D1A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="111" cy="118" r="4.5" fill="#6B4128"/>
+      <rect x="147" y="20" width="16" height="24" rx="2.5" fill="#1A1A3A"/><rect x="149" y="23" width="12" height="16" fill="#2FD49A"/>
+      <circle cx="155" cy="45" r="4.5" fill="#6B4128"/><circle cx="128" cy="48" r="14" fill="#6B4128"/>
+      <path d="M114 46A14 14 0 0 1 142 46Z" fill="#1F2A5C"/><rect x="130" y="42" width="19" height="4.5" rx="2" fill="#1F2A5C"/>
+      <circle cx="124" cy="51" r="1.6" fill="#1A1A3A"/><circle cx="133" cy="51" r="1.6" fill="#1A1A3A"/>
+      <path d="M125 57Q128.5 59.5 132 57" stroke="#1A1A3A" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="girl" viewBox="178 24 54 166">
+      <path d="M189 50Q189 28 205 28Q221 28 221 50L223 88H187Z" fill="#1E1A2E"/>
+      <rect x="191" y="178" width="14" height="8" rx="3" fill="#8A1550"/><rect x="206" y="178" width="14" height="8" rx="3" fill="#8A1550"/>
+      <rect x="193" y="122" width="11" height="58" fill="#1F5C5A"/><rect x="207" y="122" width="11" height="58" fill="#1F5C5A"/>
+      <path d="M188 74Q205 64 222 74L224 124H186Z" fill="#E8287A"/>
+      <path d="M190 78L186 98L193 112" stroke="#E8287A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M220 78L224 98L217 112" stroke="#E8287A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="205" cy="50" r="14" fill="#A8693F"/>
+      <path d="M191 48A14 14 0 0 1 219 48Q211 39 203 42Q196 41 191 48Z" fill="#1E1A2E"/>
+      <circle cx="199.5" cy="52" r="1.6" fill="#1A1A3A"/><circle cx="210.5" cy="52" r="1.6" fill="#1A1A3A"/>
+      <path d="M200 57.5Q205 61 210 57.5" stroke="#1A1A3A" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <circle cx="193" cy="114" r="4.5" fill="#A8693F"/><circle cx="217" cy="114" r="4.5" fill="#A8693F"/>
+    </symbol>
+    <symbol id="grandpa" viewBox="262 24 48 166">
+      <rect x="270" y="178" width="15" height="8" rx="3" fill="#3A2A20"/><rect x="287" y="178" width="15" height="8" rx="3" fill="#3A2A20"/>
+      <rect x="273" y="122" width="11" height="58" fill="#5A4636"/><rect x="288" y="122" width="11" height="58" fill="#5A4636"/>
+      <path d="M268 74Q285 64 302 74L304 124H266Z" fill="#129A6A"/>
+      <path d="M270 78L276 100L283 94" stroke="#129A6A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <path d="M300 78L294 100L287 94" stroke="#129A6A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="282" cy="93" r="4.5" fill="#5A3620"/><circle cx="288" cy="93" r="4.5" fill="#5A3620"/>
+      <circle cx="285" cy="50" r="14" fill="#5A3620"/>
+      <path d="M271 48A14 14 0 0 1 299 48Q292 42 285 43Q278 42 271 48Z" fill="#D9D3CB"/>
+      <circle cx="280" cy="52" r="3.4" stroke="#1A1A3A" stroke-width="1.4" fill="none"/><circle cx="290" cy="52" r="3.4" stroke="#1A1A3A" stroke-width="1.4" fill="none"/>
+      <path d="M279 58.5Q285 61.5 291 58.5Q285 56.8 279 58.5Z" fill="#D9D3CB"/>
+    </symbol>
+
+    <!-- a coin and the woven pot -->
+    <g id="coin"><circle r="17" fill="#FFC93C" stroke="#B07F00" stroke-width="3"/><circle r="11" fill="none" stroke="#B07F00" stroke-width="2" opacity=".6"/><text y="7" text-anchor="middle" font-size="19" font-weight="900" fill="#8A6400">$</text></g>
+    <g id="pot">
+      <path d="M-70 -10 Q-78 70 -40 86 L40 86 Q78 70 70 -10 Z" fill="#E8287A"/>
+      <path d="M-74 14 H74 V30 H-74Z" fill="#FFD23F"/><path d="M-72 40 H72 V54 H-72Z" fill="#2FD49A"/><path d="M-62 64 H62 V76 H-62Z" fill="#29C6E0"/>
+      <ellipse cx="0" cy="-10" rx="70" ry="16" fill="#8A1550"/><ellipse cx="0" cy="-12" rx="58" ry="10" fill="#3A0A24"/>
+    </g>
+  </defs>
+
+  <!-- BACKGROUND, shared by the whole story -->
+  <g id="bg">
+    <rect width="1280" height="720" fill="url(#sky)"/>
+    <g clip-path="url(#sunclip)">
+      <rect x="966" y="96" width="148" height="16" fill="#FFD23F"/><rect x="966" y="118" width="148" height="16" fill="#FF8A1F"/>
+      <rect x="966" y="140" width="148" height="16" fill="#FFD23F"/><rect x="966" y="162" width="148" height="16" fill="#FF8A1F"/>
+      <rect x="966" y="184" width="148" height="16" fill="#FFD23F"/><rect x="966" y="206" width="148" height="16" fill="#FF8A1F"/>
+    </g>
+    <path d="M0 520 V420 L150 360 L260 400 L420 290 L520 340 L610 250 L700 330 L800 300 L900 380 L1040 330 L1160 400 L1280 360 V520Z" fill="#8C8FB8"/>
+    <path d="M0 560 V500 L120 470 L260 520 L420 450 L560 505 L720 440 L880 500 L1040 460 L1200 510 L1280 480 V560Z" fill="#4D4C7D"/>
+    <path d="M598 262 L610 250 L626 262 L616 260 L610 268 L603 261Z M408 302 L420 290 L436 302 L426 300 L420 308 L413 301Z" fill="#fff"/>
+    <rect y="548" width="1280" height="172" fill="#EBDCC8"/>
+    <rect y="548" width="1280" height="8" fill="#D9C6AE"/>
+  </g>
+
+  <!-- 0 · THE STALL -->
+  <g id="sc0" class="sc">
+    <g id="stallzoom">
+      <rect x="290" y="300" width="14" height="300" fill="#6B4128"/><rect x="976" y="300" width="14" height="300" fill="#6B4128"/>
+      <g id="awning">
+        <path d="M270 190 H1010 L1040 300 H240Z" fill="#fff"/>
+        <path d="M270 190 H355 L345 300 H240Z M442 190 H527 L535 300 H450Z M614 190 H699 L720 300 H627Z M786 190 H871 L905 300 H796Z" fill="#E8287A"/>
+        <path d="M355 190 H442 L450 300 H345Z M699 190 H786 L796 300 H720Z" fill="#FFD23F"/>
+        <path d="M240 300 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 q27 28 54 0 z" fill="#1A1A3A" opacity=".16"/>
+      </g>
+      <use href="#elder" x="560" y="185" width="190" height="470"/>
+      <g id="table">
+        <rect x="320" y="470" width="640" height="26" fill="#C98A4B"/>
+        <rect x="336" y="496" width="608" height="150" fill="#8A5A2B"/>
+        <path d="M336 496 H944 V516 H336Z" fill="#E8287A"/><path d="M336 516 H944 V526 H336Z" fill="#FFD23F"/><path d="M336 526 H944 V536 H336Z" fill="#2FD49A"/>
+        <!-- fruit -->
+        <g><circle cx="380" cy="458" r="17" fill="#FF8A1F"/><circle cx="414" cy="462" r="17" fill="#FF8A1F"/><circle cx="397" cy="440" r="17" fill="#F07D1A"/><circle cx="868" cy="458" r="17" fill="#E8287A"/><circle cx="902" cy="462" r="17" fill="#C21A63"/><circle cx="885" cy="440" r="17" fill="#E8287A"/></g>
+        <!-- the notebook -->
+        <g id="notebook"><rect x="690" y="446" width="92" height="28" fill="#fff" stroke="#1A1A3A" stroke-width="3" transform="rotate(-4 736 460)"/><path d="M702 456 h60 M702 464 h46" stroke="#4A4766" stroke-width="3" transform="rotate(-4 736 460)"/></g>
+      </g>
+    </g>
+  </g>
+
+  <!-- 1+ · THE CIRCLE -->
+  <g id="sc1" class="sc">
+    <g id="ringzoom">
+      <g id="fig_boy"><use href="#boy" x="240" y="228" width="180" height="390"/></g>
+      <g id="fig_girl"><use href="#girl" x="440" y="236" width="160" height="380"/></g>
+      <g id="fig_grandpa"><use href="#grandpa" x="820" y="236" width="160" height="380"/></g>
+      <g id="fig_elder"><use href="#elder" x="990" y="228" width="190" height="390"/></g>
+      <g id="fig_back" style="filter:hue-rotate(160deg)"><use href="#girl" x="640" y="300" width="120" height="290"/></g>
+      <g id="potA" transform="translate(690,520)"><g class="potbody"><use href="#pot" transform="scale(0.85)"/></g></g>
+      <g id="hearts"></g>
+      <g id="coins"></g>
+      <g id="potlabel" opacity="0"><rect x="560" y="400" width="260" height="62" fill="#fff" stroke="#1A1A3A" stroke-width="4"/><text x="690" y="445" text-anchor="middle" font-size="32" font-weight="900" fill="#1A1A3A">5 × $5 = $25</text></g>
+    </g>
+  </g>
+
+  <!-- chat that nobody answers -->
+  <g id="chat" opacity="0">
+    <rect x="70" y="60" width="430" height="230" rx="22" fill="#fff" stroke="#1A1A3A" stroke-width="4"/>
+    <rect x="94" y="84" width="300" height="46" rx="16" fill="#E8287A"/><text x="112" y="116" font-size="22" font-weight="700" fill="#fff" style="font-family:Figtree,sans-serif">Where are you? 🙏</text>
+    <rect x="94" y="144" width="360" height="46" rx="16" fill="#E8287A"/><text x="112" y="176" font-size="22" font-weight="700" fill="#fff" style="font-family:Figtree,sans-serif">The group is waiting for the pot</text>
+    <g id="seen"><text x="340" y="222" font-size="18" fill="#4A4766" style="font-family:Figtree,sans-serif">Seen 9:41</text></g>
+    <rect x="94" y="236" width="86" height="40" rx="16" fill="#E7E1D6"/><g id="dots"><circle cx="118" cy="256" r="6" fill="#8C8FB8"/><circle cx="137" cy="256" r="6" fill="#8C8FB8"/><circle cx="156" cy="256" r="6" fill="#8C8FB8"/></g>
+  </g>
+
+  <!-- Rosa's purse and the missing money -->
+  <g id="sc5" class="sc">
+    <g id="emptypot" transform="translate(300,520)"><use href="#pot" transform="scale(0.8)" opacity=".55"/></g>
+    <g id="missing" opacity="0"><rect x="150" y="360" width="300" height="62" fill="#fff" stroke="#C21A63" stroke-width="4"/><text x="300" y="404" text-anchor="middle" font-size="30" font-weight="900" fill="#C21A63">Missing: $20</text></g>
+    <g id="pocket" opacity="0"><rect x="470" y="250" width="430" height="62" fill="#fff" stroke="#1A1A3A" stroke-width="4"/><text x="685" y="293" text-anchor="middle" font-size="26" font-weight="900" fill="#1A1A3A">From her own pocket</text></g>
+    <g id="coins5"></g>
+  </g>
+
+  <!-- 6 · TWO CITIES, NO WAY IN -->
+  <g id="sc6" class="sc">
+    <rect x="0" y="0" width="1280" height="720" fill="url(#sky)"/>
+    <rect x="636" y="0" width="8" height="720" fill="#1A1A3A"/>
+    <!-- left: La Paz -->
+    <rect x="0" y="548" width="636" height="172" fill="#EBDCC8"/>
+    <path d="M0 520 V450 L110 400 L220 440 L330 340 L440 410 L540 380 L636 430 V520Z" fill="#8C8FB8"/>
+    <path d="M0 560 V500 L140 470 L300 520 L460 460 L636 510 V560Z" fill="#4D4C7D"/>
+    <use href="#elder" x="230" y="205" width="190" height="410"/>
+    <text x="318" y="70" text-anchor="middle" font-size="40" font-weight="900" fill="#1A1A3A">La Paz, Bolivia</text>
+    <!-- right: Madrid -->
+    <rect x="644" y="0" width="636" height="720" fill="#2A2F63" opacity=".0"/>
+    <rect x="644" y="430" width="636" height="118" fill="#B9AFA2"/>
+    <g fill="#6E6A9A"><rect x="660" y="340" width="70" height="210"/><rect x="740" y="290" width="86" height="260"/><rect x="836" y="370" width="64" height="180"/><rect x="1110" y="320" width="80" height="230"/><rect x="1200" y="380" width="70" height="170"/></g>
+    <g fill="#FFD23F" opacity=".9"><rect x="676" y="360" width="14" height="14"/><rect x="700" y="360" width="14" height="14"/><rect x="760" y="316" width="14" height="14"/><rect x="788" y="316" width="14" height="14"/><rect x="760" y="352" width="14" height="14"/><rect x="1130" y="344" width="14" height="14"/><rect x="1158" y="344" width="14" height="14"/></g>
+    <rect x="644" y="548" width="636" height="172" fill="#D9CBBE"/>
+    <use href="#girl" x="900" y="215" width="190" height="400"/>
+    
+    <text x="962" y="70" text-anchor="middle" font-size="40" font-weight="900" fill="#1A1A3A">Madrid, Spain</text>
+    <!-- the cash that cannot cross -->
+    <g id="bill" transform="translate(470,400)"><rect x="-54" y="-30" width="108" height="60" rx="6" fill="#7CCB9B" stroke="#0E6B44" stroke-width="4"/><circle r="16" fill="#0E6B44" opacity=".35"/><text y="9" text-anchor="middle" font-size="28" font-weight="900" fill="#0E6B44">$</text></g>
+    <g id="wall" opacity="0"><circle cx="640" cy="420" r="52" fill="#E8287A" stroke="#fff" stroke-width="6"/><path d="M618 398 L662 442 M662 398 L618 442" stroke="#fff" stroke-width="10" stroke-linecap="round"/></g>
+    <path id="trail" d="M360 420 Q500 330 620 410" stroke="#1A1A3A" stroke-width="5" stroke-dasharray="4 14" stroke-linecap="round" fill="none" opacity="0"/>
+  </g>
+  <g id="confetti"></g>
+</svg>
+<div id="cap"><span></span></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const SC = new URLSearchParams(location.search).get("scene") || window.__SCENE || "s01-story";
+const TM = (window.__TIMINGS || []).map((t) => ({ start: t.start + 0.35, end: t.end + 0.35 }));
+window.__cues = [];
+let t0 = null;
+const timers = [];
+const at = (sec, fn) => timers.push(setTimeout(fn, Math.max(0, sec * 1000 - (performance.now() - t0))));
+const cue = (name, sec, gain = 1) => window.__cues.push({ sfx: name, at: sec, gain });
+const anim = (el, kf, dur, opt = {}) => el.animate(kf, { duration: dur * 1000, fill: "forwards", easing: "cubic-bezier(.2,.8,.2,1)", ...opt });
+const fadeIn = (el, sec = 0.5) => anim(el, [{ opacity: 0 }, { opacity: 1 }], sec);
+const fadeOut = (el, sec = 0.5) => anim(el, [{ opacity: 1 }, { opacity: 0 }], sec);
+const caption = (text, sec, hold = 2.6) => {
+  at(sec, () => {
+    const s = document.querySelector("#cap span");
+    s.textContent = text;
+    anim(s, [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "translateY(0)" }], 0.35);
+    cue("tick", sec, 0.5);
+    at(sec + hold, () => anim(s, [{ opacity: 1 }, { opacity: 0 }], 0.35));
+  });
+};
+const slowZoom = (el, from, to, sec, cx = 640, cy = 400) => anim(el, [{ transform: `translate(${cx}px,${cy}px) scale(${from}) translate(${-cx}px,${-cy}px)` }, { transform: `translate(${cx}px,${cy}px) scale(${to}) translate(${-cx}px,${-cy}px)` }], sec, { easing: "linear" });
+
+function mk(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  parent.appendChild(e);
+  return e;
+}
+function flyCoin(parent, from, to, sec, delay, arc = -140, big = 1) {
+  const g = mk("g", { opacity: 0 }, parent);
+  mk("use", { href: "#coin" }, g);
+  at(sec + delay, () => {
+    g.setAttribute("opacity", 1);
+    anim(g, [
+      { transform: `translate(${from[0]}px,${from[1]}px) scale(${big})`, opacity: 1 },
+      { transform: `translate(${(from[0] + to[0]) / 2}px,${Math.min(from[1], to[1]) + arc}px) scale(${big * 1.1})`, opacity: 1, offset: 0.5 },
+      { transform: `translate(${to[0]}px,${to[1]}px) scale(${big * 0.8})`, opacity: 0 },
+    ], 0.8, { easing: "ease-in-out" });
+  });
+  return g;
+}
+function confetti(cx, cy, sec) {
+  const colors = ["#FFD23F", "#29C6E0", "#FF8A1F", "#2FD49A", "#E8287A"];
+  at(sec, () => {
+    for (let i = 0; i < 26; i++) {
+      const r = mk("rect", { width: 12, height: 12, fill: colors[i % 5] }, $("confetti"));
+      const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 260;
+      anim(r, [
+        { transform: `translate(${cx}px,${cy}px) rotate(45deg)`, opacity: 1 },
+        { transform: `translate(${cx + Math.cos(a) * d}px,${cy + Math.sin(a) * d - 80}px) rotate(${180 + i * 30}deg)`, opacity: 0 },
+      ], 1.3 + Math.random() * 0.6, { easing: "cubic-bezier(.1,.7,.3,1)" });
+    }
+  });
+}
+
+function scene1() {
+  // ---- sentence 0: "Meet Doña Rosa."
+  fadeIn($("sc0"), 0.6);
+  slowZoom($("stallzoom"), 1.0, 1.1, 30, 640, 420);
+  cue("sparkle", 0.5);
+  caption("Doña Rosa · street vendor · La Paz", TM[0].start + 0.3, 3.6);
+  // she writes in her notebook
+  at(TM[0].start + 0.9, () => anim($("notebook"), [{ transform: "translateY(0)" }, { transform: "translateY(-6px)" }, { transform: "translateY(0)" }], 0.8, { iterations: 3 }));
+
+  // ---- sentence 1: "...she saves in a pasanaku."
+  at(TM[1].start + 0.2, () => {
+    fadeOut($("sc0"), 0.5);
+    fadeIn($("sc1"), 0.6);
+    slowZoom($("ringzoom"), 1.0, 1.05, 24, 640, 440);
+    // the figures pop in one by one
+    ["fig_back", "fig_boy", "fig_girl", "fig_grandpa", "fig_elder"].forEach((id, i) => {
+      const g = $(id);
+      g.style.opacity = 0;
+      at(TM[1].start + 0.5 + i * 0.35, () => {
+        anim(g, [{ opacity: 0, transform: "translateY(40px)" }, { opacity: 1, transform: "translateY(0)" }], 0.5);
+        cue("pop", TM[1].start + 0.5 + i * 0.35, 0.7);
+      });
+    });
+  });
+  caption("A pasanaku: a savings circle", TM[1].start + 1.2, 3.2);
+
+  // ---- sentence 2: everyone contributes, one takes the pot
+  const hands = [[330, 440], [520, 470], [890, 470], [1070, 440], [700, 380]];
+  const pot = [690, 500];
+  hands.forEach((h, i) => {
+    flyCoin($("coins"), h, pot, TM[2].start, 0.7 + i * 0.28);
+    cue("coin", TM[2].start + 0.7 + i * 0.28 + 0.7, 0.8);
+  });
+  at(TM[2].start + 2.4, () => anim($("potlabel"), [{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "translateY(0)" }], 0.4));
+  caption("Same amount every round. One person takes the pot.", TM[2].start + 0.2, 4.2);
+  // the pot goes to the boy
+  at(TM[2].end - 1.4, () => {
+    anim($("potA"), [{ transform: "translate(690px,520px)" }, { transform: "translate(500px,300px)" }, { transform: "translate(350px,330px)" }], 1.0, { easing: "ease-in-out" });
+    cue("drop", TM[2].end - 1.4 + 1.0, 0.8);
+    fadeOut($("potlabel"), 0.3);
+    confetti(350, 330, TM[2].end - 0.5);
+    cue("sparkle", TM[2].end - 0.5, 0.8);
+  });
+
+  // ---- sentence 3: "It runs on trust."
+  at(TM[3].start, () => {
+    for (let i = 0; i < 9; i++) {
+      const h = mk("path", { d: "M0 -8 C-16 -26 -34 -4 0 20 C34 -4 16 -26 0 -8 Z", fill: i % 2 ? "#E8287A" : "#FFD23F", opacity: 0 }, $("hearts"));
+      const x = 280 + i * 100, y = 250 + (i % 3) * 30;
+      at(TM[3].start + i * 0.12, () => anim(h, [{ transform: `translate(${x}px,${y + 90}px) scale(.5)`, opacity: 0 }, { transform: `translate(${x}px,${y}px) scale(1.1)`, opacity: 1, offset: 0.4 }, { transform: `translate(${x}px,${y - 80}px) scale(1)`, opacity: 0 }], 1.6));
+    }
+    cue("sparkle", TM[3].start + 0.2, 0.6);
+  });
+  caption("It runs on trust", TM[3].start + 0.1, 2.0);
+
+  // ---- sentence 4: "...the first person to get the pot stopped answering."
+  at(TM[4].start, () => {
+    fadeIn($("chat"), 0.4);
+    cue("notify", TM[4].start + 0.3, 0.8);
+    anim($("dots"), [{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }], 1.2, { iterations: 4 });
+  });
+  caption("…until someone stopped answering", TM[4].start + 0.4, 3.6);
+  at(TM[4].start + 1.0, () => {
+    // the boy walks away with the pot
+    anim($("fig_boy"), [{ transform: "translateX(0)" }, { transform: "translateX(1100px)" }], 3.4, { easing: "ease-in" });
+    anim($("potA"), [{ transform: "translate(350px,330px)" }, { transform: "translate(1450px,330px)" }], 3.4, { easing: "ease-in" });
+    cue("whoosh", TM[4].start + 1.0, 0.5);
+    cue("sad", TM[4].start + 2.6, 0.9);
+  });
+
+  // ---- sentence 5: Rosa pays from her pocket
+  at(TM[5].start - 0.1, () => {
+    fadeOut($("chat"), 0.4);
+    fadeOut($("sc1"), 0.5);
+    fadeIn($("sc5"), 0.5);
+    anim($("missing"), [{ opacity: 0 }, { opacity: 1 }], 0.4);
+  });
+  // Rosa stays in the picture: she is drawn again, large, on the right
+  const rosa = mk("use", { href: "#elder", x: 900, y: 190, width: 190, height: 430 }, $("sc5"));
+  rosa.setAttribute("opacity", 0);
+  at(TM[5].start - 0.1, () => anim(rosa, [{ opacity: 0 }, { opacity: 1 }], 0.5));
+  at(TM[5].start + 0.6, () => anim($("pocket"), [{ opacity: 0 }, { opacity: 1 }], 0.4));
+  for (let i = 0; i < 6; i++) {
+    flyCoin($("coins5"), [995, 420], [300, 500], TM[5].start, 0.9 + i * 0.3, -180, 1.1);
+    cue("coin", TM[5].start + 0.9 + i * 0.3 + 0.7, 0.8);
+  }
+  caption("She covered it from her own pocket", TM[5].start + 0.2, 3.0);
+
+  // ---- sentence 6: two cities
+  at(TM[6].start, () => {
+    fadeOut($("sc5"), 0.4);
+    fadeIn($("sc6"), 0.5);
+  });
+  at(TM[6].start + 2.2, () => {
+    $("trail").setAttribute("opacity", 1);
+    anim($("bill"), [{ transform: "translate(470px,400px)" }, { transform: "translate(560px,360px)" }, { transform: "translate(590px,400px)" }, { transform: "translate(500px,410px)" }], 1.4, { easing: "ease-in-out" });
+    at(TM[6].start + 3.1, () => { anim($("wall"), [{ opacity: 0, transform: "scale(.4)" }, { opacity: 1, transform: "scale(1)" }], 0.3); cue("sad", TM[6].start + 3.1, 0.5); });
+  });
+  caption("Cash only: her daughter in Madrid can't join", TM[6].start + 0.4, 5.6);
+}
+
+function scene2() {
+  // the logo reveal and the promise (the page is its own scene)
+  const L = $("bg");
+  L.style.opacity = 0;
+  document.body.style.background = "#FFF6EC";
+  const box = document.createElement("div");
+  box.style.cssText = "position:absolute;left:0;top:0;width:1280px;height:720px;background:#FFF6EC;overflow:hidden";
+  box.innerHTML = `
+    <div id="lg" style="position:absolute;left:70px;top:40px;width:490px;opacity:0"><img src="${window.__LOGO}" style="width:490px;display:block"></div>
+    <div id="shot" style="position:absolute;left:690px;top:90px;width:520px;height:520px;opacity:0;border:4px solid #1A1A3A;box-shadow:12px 12px 0 #D4106B;overflow:hidden;background:#fff"><img src="${window.__SHOT}" style="width:1040px;margin-left:-520px;margin-top:-10px"></div>
+    <div id="chips" style="position:absolute;left:80px;top:590px;display:flex;gap:18px;opacity:0">
+      <div style="padding:12px 22px;border:3px solid #1A1A3A;background:#FFC93C;font:900 26px Unbounded,sans-serif">PayPal</div>
+      <div style="padding:12px 22px;border:3px solid #1A1A3A;background:#fff;font:900 26px Unbounded,sans-serif">+ AI that proposes</div>
+    </div>`;
+  $("root").appendChild(box);
+  const lg = $("lg"), shot = $("shot"), chips = $("chips");
+  at(0.35, () => { anim(lg, [{ opacity: 0, transform: "scale(.7)" }, { opacity: 1, transform: "scale(1)" }], 0.9, { easing: "cubic-bezier(.2,1.4,.4,1)" }); cue("sparkle", 0.4, 1); cue("whoosh", 0.3, 0.6); });
+  at(TM[1].start, () => { cue("chime", TM[1].start + 0.1, 0.8); });
+  at(TM[2].start - 0.2, () => {
+    anim(shot, [{ opacity: 0, transform: "translateX(80px)" }, { opacity: 1, transform: "translateX(0)" }], 0.7);
+    anim(chips, [{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "translateY(0)" }], 0.6);
+    cue("pop", TM[2].start, 0.8);
+  });
+}
+
+/** A full-screen card on its own background (used after the story, for the numbers and for the closing). */
+function card(html, bg) {
+  $("bg").style.opacity = 0;
+  const box = document.createElement("div");
+  box.style.cssText = `position:absolute;left:0;top:0;width:1280px;height:720px;overflow:hidden;background:${bg}`;
+  box.innerHTML = html;
+  $("root").appendChild(box);
+  return box;
+}
+
+function sceneEval() {
+  const rows = [
+    ["Grounded answers", "each member's real balance, in USD", 5, 5],
+    ["Language", "answers in the member's language", 2, 2],
+    ["Prompt injection", "planted instructions are not obeyed", 3, 3],
+    ["Reminders", "the model never writes an amount", 8, 8],
+    ["Form filling", "never invents what the text does not say", 4, 4],
+  ];
+  card(`
+    <div style="position:absolute;left:90px;top:52px;font:900 44px Unbounded,sans-serif;color:#1A1A3A">The AI, measured</div>
+    <div id="rows" style="position:absolute;left:90px;top:150px;width:1100px"></div>
+    <div id="total" style="position:absolute;right:90px;top:46px;opacity:0;font:900 64px Unbounded,sans-serif;color:#0E9A64">22 / 22</div>`, "#FFF6EC");
+  rows.forEach(([name, what, ok, n], i) => {
+    const r = document.createElement("div");
+    r.style.cssText = "display:flex;align-items:center;gap:22px;margin-bottom:20px;opacity:0;border:3px solid #1A1A3A;background:#fff;padding:14px 22px;box-shadow:6px 6px 0 #29C6E0";
+    r.innerHTML = `<div style="flex:1"><div style="font:900 28px Unbounded,sans-serif;color:#1A1A3A">${name}</div><div style="font:700 21px Figtree,sans-serif;color:#4A4766">${what}</div></div><div style="font:900 40px Unbounded,sans-serif;color:#0E9A64">${ok} / ${n}</div>`;
+    $("rows").appendChild(r);
+    at(0.5 + i * 0.55, () => { anim(r, [{ opacity: 0, transform: "translateX(-40px)" }, { opacity: 1, transform: "translateX(0)" }], 0.5); cue("pop", 0.5 + i * 0.55, 0.6); });
+  });
+  at(0.5 + rows.length * 0.55 + 0.2, () => { anim($("total"), [{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "scale(1)" }], 0.7, { easing: "cubic-bezier(.2,1.4,.4,1)" }); cue("chime", 0.5 + rows.length * 0.55 + 0.2, 0.8); });
+}
+
+function sceneClose() {
+  card(`
+    <div id="lg" style="position:absolute;left:0;right:0;top:34px;text-align:center;opacity:0"><img src="${window.__LOGO}" style="width:500px"></div>
+    <div id="urls" style="position:absolute;left:0;right:0;top:650px;text-align:center;opacity:0;font:700 26px Figtree,sans-serif;color:#1A1A3A">
+      <span style="border:3px solid #1A1A3A;background:#fff;padding:8px 20px;margin:0 10px">ayni.devsjec.com</span>
+      <span style="border:3px solid #1A1A3A;background:#fff;padding:8px 20px;margin:0 10px">github.com/JkalasG/ayni</span></div>`, "#FFF6EC");
+  at(0.2, () => { anim($("lg"), [{ opacity: 0, transform: "scale(.85)" }, { opacity: 1, transform: "scale(1)" }], 1.0); cue("sparkle", 0.3, 0.9); });
+  at(TM[2].start, () => { anim($("urls"), [{ opacity: 0, transform: "translateY(16px)" }, { opacity: 1, transform: "translateY(0)" }], 0.6); cue("chime", TM[2].start + 0.2, 0.7); });
+}
+
+window.startScene = function () {
+  t0 = performance.now();
+  if (SC === "s01-story") scene1();
+  else if (SC === "s02-reveal") scene2();
+  else if (SC === "card-eval") sceneEval();
+  else if (SC === "s11-close") sceneClose();
+};
+</script>
+</body>
+</html>

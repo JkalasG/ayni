@@ -18,3 +18,7 @@ backend/.mock-db/
 
 # screenshots left by tools/real-data when PayPal shows something unexpected
 tools/real-data/screenshots/
+
+# the video tool: work files, the video and its dependencies
+tools/video/work/
+tools/video/out/
