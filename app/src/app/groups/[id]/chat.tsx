@@ -18,7 +18,9 @@ import { api, ApiError, money } from "@/lib/api";
 import { payContribution } from "@/lib/pay";
 import { preloadPayPal } from "@/lib/paypal-sdk";
 import { PayPalWordmark } from "@/components/paypal";
-import { colors, radius, fonts } from "@/lib/theme";
+import { colors, radius, fonts, space } from "@/lib/theme";
+import { Guide } from "@/components/guide";
+import { useLayout } from "@/lib/layout";
 
 type ChatEvent =
   | { type: "paid"; name: string; round: number }
@@ -51,6 +53,7 @@ export default function Chat() {
   useScheme(); // re-render when the color mode changes
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, lang } = useI18n();
+  const { wide } = useLayout();
   const { me } = useAuth();
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const [text, setText] = useState("");
@@ -135,12 +138,14 @@ export default function Chat() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["bottom"]}>
       <Stack.Screen options={{ title: t("chat") }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
+      {/* computer: the conversation in a framed column aligned with the group's menu, and beside it what this chat is for */}
+      <View style={wide ? { flex: 1, flexDirection: "row", gap: space(8), width: "100%", maxWidth: 1240 + space(20), alignSelf: "center", paddingHorizontal: space(10), paddingTop: space(5), paddingBottom: space(5) } : { flex: 1 }}>
+      <KeyboardAvoidingView style={[{ flex: 1, minWidth: 0 }, wide && { borderWidth: 2, borderColor: colors.line, backgroundColor: colors.bg }]} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
         <FlatList
           ref={list}
           data={msgs ?? []}
           keyExtractor={(m) => m.id}
-          contentContainerStyle={{ padding: 16, gap: 10, maxWidth: 560, width: "100%", alignSelf: "center" }}
+          contentContainerStyle={{ padding: wide ? 20 : 16, gap: 10, maxWidth: wide ? undefined : 560, width: "100%", alignSelf: "center" }}
           onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
           ListEmptyComponent={msgs ? <P muted>{t("chEmpty")}</P> : undefined}
           renderItem={({ item }) => (
@@ -169,7 +174,7 @@ export default function Chat() {
           }
         />
         <View style={{ borderTopWidth: 1, borderColor: colors.line, backgroundColor: colors.surface }}>
-          <View style={{ padding: 12, gap: 10, maxWidth: 560, width: "100%", alignSelf: "center" }}>
+          <View style={{ padding: wide ? 16 : 12, gap: 10, maxWidth: wide ? undefined : 560, width: "100%", alignSelf: "center" }}>
             {error && <Notice tone="error">{error}</Notice>}
             {canTranslate && <Toggle label={t("chTranslate")} value={translate} onChange={setTranslate} />}
             <Chips
@@ -218,6 +223,21 @@ export default function Chat() {
           </View>
         </View>
       </KeyboardAvoidingView>
+      {wide ? (
+        <View style={{ width: 360 }}>
+          <Guide
+            icon="chat"
+            title={t("chGuide")}
+            steps={[
+              { title: t("chToGroup"), body: t("chG1") },
+              { title: t("chToAyni"), body: t("chG2") },
+              { title: t("chG3t"), body: t("chG3") },
+              { title: t("chG4t"), body: t("chG4") },
+            ]}
+          />
+        </View>
+      ) : null}
+      </View>
     </SafeAreaView>
   );
 }
@@ -273,7 +293,7 @@ function Bubble({ m, mine, selected, onSelect, onHide, translation, showOriginal
   const label = [mine ? null : assistant ? "Ayni" : m.authorName, m.private ? t("chPrivate") : null, time].filter(Boolean).join("  ·  ");
   if (m.hidden) {
     return (
-      <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%", gap: 2 }}>
+      <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "78%", gap: 2 }}>
         <Text style={{ fontSize: 12.5, color: colors.muted, fontFamily: fonts.bodyBold }}>{label}</Text>
         <View style={{ borderRadius: radius.md, padding: 12, borderWidth: 1, borderColor: colors.line, borderStyle: "dashed" }}>
           <Text style={{ color: colors.muted, fontFamily: fonts.body, fontStyle: "italic", fontSize: 14.5 }}>{t("chHidden")}</Text>
@@ -282,7 +302,7 @@ function Bubble({ m, mine, selected, onSelect, onHide, translation, showOriginal
     );
   }
   return (
-    <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%", gap: 2 }}>
+    <View style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "78%", gap: 2 }}>
       <Text style={{ fontSize: 12.5, color: colors.muted, fontFamily: fonts.bodyBold, textAlign: mine ? "right" : "left" }}>{label}</Text>
       <Pressable
         disabled={!m.canHide}
