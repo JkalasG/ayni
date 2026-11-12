@@ -7,6 +7,8 @@ export type PersonalCalendarProps = {
   /** The day the screen is looking at. */
   selected: Date;
   onSelect: (d: Date) => void;
+  /** The card of a movement leads to its pasanaku. */
+  onOpenGroup: (groupId: string) => void;
   money: (cents: number) => string;
   labels: {
     pay: string;
@@ -18,5 +20,15 @@ export type PersonalCalendarProps = {
     round: string;
     held: string;
     due: string;
+    open: string;
+    status: string;
+    members: string;
+    turn: string;
+    paidOn: string;
+    pot: string;
+    youGet: string;
+    progress: string;
+    freq: Record<string, string>;
+    groupState: Record<string, string>;
   };
 };

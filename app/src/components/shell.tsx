@@ -6,6 +6,7 @@ import { AguayoBand } from "@/components/aguayo";
 import { Icon, type IconName } from "@/components/icons";
 import { Logo } from "@/components/brand";
 import { useAuth } from "@/lib/auth";
+import { prefetchCharts } from "@/lib/prefetch";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useLayout } from "@/lib/layout";
 import { useScheme, type SchemePref } from "@/lib/scheme";
@@ -56,6 +57,10 @@ export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   // the chat owns the whole screen on a phone (keyboard and composer); on a computer the sidebar stays, like in every other view of the group
   const nav = !!me && !(NO_NAV(path) && !(wide && path.endsWith("/chat")));
+  // signed in: warm up the chart libraries in the background
+  useEffect(() => {
+    if (me) prefetchCharts();
+  }, [!!me]);
   // Signing out (or an expired session) while on a private screen: go to the welcome page instead of waiting forever.
   useEffect(() => {
     if (!loading && !me && !PUBLIC(path)) router.replace("/");

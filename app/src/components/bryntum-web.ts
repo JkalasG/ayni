@@ -240,13 +240,31 @@ ${hues}
 }
 
 /** Loads Bryntum's styles for the current color mode, dresses them as Ayni, registers the license key and returns the Scheduler class. */
+let schedulerLib: Promise<any> | null = null;
+/**
+ * The library itself (the heavy part). Asked for early (see lib/prefetch), so by the time a chart is opened it is there.
+ * The key must be registered before it loads; it is public by nature (it ships in the page).
+ */
+export function preloadScheduler(): Promise<any> {
+  schedulerLib ??= (async () => {
+    const key = process.env.EXPO_PUBLIC_BRYNTUM_LICENSE;
+    if (key) ((globalThis as any).bryntum ??= {}).licenseKey = key;
+    return (await import("@bryntum/scheduler-enterprise")).Scheduler;
+  })();
+  return schedulerLib;
+}
+
 export async function loadScheduler(dark: boolean): Promise<any> {
-  await Promise.all([
+  // Stylesheets and library travel together: the links are created in order (the theme after the base sheet, so it wins)
+  // and the library starts downloading at the same time instead of after them.
+  const sheets = Promise.all([
     loadCss("bryntum-core", `${ASSETS}/scheduler.css`),
     loadCss("bryntum-fa", `${ASSETS}/fontawesome/css/fontawesome.css`),
     loadCss("bryntum-fa-solid", `${ASSETS}/fontawesome/css/solid.css`),
+    loadCss("bryntum-theme", `${ASSETS}/stockholm-${dark ? "dark" : "light"}.css`),
   ]);
-  await loadCss("bryntum-theme", `${ASSETS}/stockholm-${dark ? "dark" : "light"}.css`);
+  const lib = preloadScheduler();
+  await sheets;
   // After the theme file, so these values win; replaced when the color mode changes.
   let style = document.getElementById("ayni-bryntum") as HTMLStyleElement | null;
   if (!style) {
@@ -255,11 +273,7 @@ export async function loadScheduler(dark: boolean): Promise<any> {
   }
   style.textContent = themeCss(dark ? night : dawn);
   document.head.appendChild(style); // appending an existing node moves it to the end
-  // The key must be registered before the library loads. It is public by nature (it ships in the page).
-  const key = process.env.EXPO_PUBLIC_BRYNTUM_LICENSE;
-  if (key) ((globalThis as any).bryntum ??= {}).licenseKey = key;
-  const { Scheduler } = await import("@bryntum/scheduler-enterprise");
-  return Scheduler;
+  return lib;
 }
 
 export const paletteOf = (dark: boolean): Palette => (dark ? night : dawn);

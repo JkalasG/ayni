@@ -18,7 +18,8 @@ export type CalEvent = {
   heldCents?: number;
   estimated: boolean;
 };
-export type CalData = { now: string; groups: { id: string; name: string; status: string }[]; events: CalEvent[] };
+export type CalGroup = { id: string; name: string; status: string; frequency: string; members: number; contributionCents: number; rounds: number; paidOutRounds: number; myTurn: number | null };
+export type CalData = { now: string; groups: CalGroup[]; events: CalEvent[] };
 
 /** yyyy-mm-dd of the person's own day (not UTC's). */
 export const dayKey = (d: Date | string) => {

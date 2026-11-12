@@ -88,6 +88,16 @@ export default function MyCalendar() {
     round: t("round"),
     held: t("pcHeldTip"),
     due: t("due"),
+    open: t("pcOpen"),
+    status: t("lgColStatus"),
+    members: t("membersWord"),
+    turn: t("pcTurn"),
+    paidOn: t("pcOnDay"),
+    pot: t("pcPotTotal"),
+    youGet: t("pcYouGet"),
+    progress: t("pcProgress"),
+    freq: { WEEKLY: t("WEEKLY"), BIWEEKLY: t("BIWEEKLY"), MONTHLY: t("MONTHLY") },
+    groupState: Object.fromEntries(["FORMING", "ORDERING", "ACTIVE", "FINISHED", "CANCELLED"].map((k) => [k, t(`status_${k}` as Key)])),
   };
 
   const side = (
@@ -184,7 +194,7 @@ export default function MyCalendar() {
       ) : null}
       <View style={{ flexDirection: wide ? "row" : "column", gap: space(6), alignItems: "flex-start" }}>
         <View style={{ flex: 1, minWidth: 0, width: "100%", gap: space(4) }}>
-          <PersonalCalendar data={shown} dark={c.scheme === "dark"} lang={lang === "en" ? "en" : "es"} selected={selected} onSelect={pick} money={money} labels={labels} />
+          <PersonalCalendar data={shown} dark={c.scheme === "dark"} lang={lang === "en" ? "en" : "es"} selected={selected} onSelect={pick} onOpenGroup={(id) => router.push(`/groups/${id}` as any)} money={money} labels={labels} />
           <Legend
             note={t("pcEstimate")}
             items={[

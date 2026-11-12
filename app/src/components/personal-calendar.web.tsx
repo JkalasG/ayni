@@ -40,6 +40,7 @@ function toBryntum(data: CalData, p: PersonalCalendarProps) {
       endDate: next,
       allDay: true,
       resourceId: e.groupId,
+      groupId: e.groupId,
       draggable: false,
       resizable: false,
       cls: `ay-ev ay-h-${hueOfEvent(e)} ay-k-${e.kind}${e.estimated ? " ay-est" : ""}`,
@@ -57,11 +58,14 @@ function toBryntum(data: CalData, p: PersonalCalendarProps) {
   return { resources, events };
 }
 
+let latest_open: (groupId: string) => void = () => {};
+
 export function PersonalCalendar(props: PersonalCalendarProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const calendar = useRef<any>(null);
   const latest = useRef(props);
   latest.current = props;
+  latest_open = (id) => latest.current.onOpenGroup(id);
   const { width } = useWindowDimensions();
   const [ready, setReady] = useState(false);
   const bucket = Math.round(width / 96);
@@ -106,8 +110,11 @@ export function PersonalCalendar(props: PersonalCalendarProps) {
         // every view draws the movements the same way
         modes: { day: null, year: null, week: compact ? null : { eventRenderer: draw(true) }, month: { eventRenderer: draw(false) }, agenda: { eventRenderer: draw(true) } },
         sidebar: false,
-        features: { drag: false, eventTooltip: { template: ({ eventRecord: e }: any) => tipHtml(e, latest.current) } },
-        tbar: { items: { viewActions: { items: {} } } },
+        features: {
+          drag: false,
+          // the card that opens on a movement: the movement and its pasanaku, in Ayni's own look
+          eventTooltip: { renderer: ({ eventRecord: e }: any) => card(e, latest.current), titleRenderer: () => "", tooltip: { cls: "ay-evtip", tools: { edit: false } } },
+        },
         listeners: {
           activeDateChange: ({ value }: any) => value && latest.current.onSelect(value),
           eventClick: ({ date, eventRecord }: any) => latest.current.onSelect(date ?? eventRecord.startDate),
@@ -168,15 +175,39 @@ export function PersonalCalendar(props: PersonalCalendarProps) {
   );
 }
 
-function tipHtml(e: any, p: PersonalCalendarProps): string {
+/** The card of a movement: what it is, how much, and the pasanaku behind it with where it stands. */
+function card(e: any, p: PersonalCalendarProps) {
   const l = p.labels;
+  const g = p.data.groups.find((x) => x.id === e.groupId);
+  const hue = hueOfEvent({ kind: e.kind, status: e.status } as CalEvent);
   const kind = e.kind === "pay" ? l.pay : e.kind === "receive" ? l.receive : l.guarantee;
-  const lines = [
-    `<b>${esc(e.sign)}${esc(p.money(e.amountCents))}</b> · ${esc(kind)}`,
-    `<span>${esc(e.groupName)}${e.round ? ` · ${esc(l.round)} ${e.round}` : ""}</span>`,
-    `<span>${esc(l.state[e.status] ?? e.status)}${e.estimated ? ` · ${esc(l.estimated)}` : ""}</span>`,
+  const day = (iso: string) => new Date(iso).toLocaleDateString(p.lang === "en" ? "en-US" : "es-BO", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, (x) => x.toUpperCase());
+  const row = (label: string, value: string, strong = false) => ({ class: "ay-tip-row", children: [{ tag: "span", text: label }, { tag: strong ? "b" : "span", text: value }] });
+  const done = e.status === "paid" || e.status === "covered" || e.status === "received";
+  const rows = [
+    ...(e.round && g ? [row(l.round, `${e.round} / ${g.rounds}`)] : []),
+    row(l.status, `${l.state[e.status] ?? e.status}${e.estimated ? ` · ${l.estimated}` : ""}`, true),
+    row(done ? l.paidOn : l.due, day(e.startDate.toISOString())),
+    ...(e.kind === "receive" ? [row(l.pot, p.money(e.amountCents + (e.heldCents ?? 0))), row(l.held, "−" + p.money(e.heldCents ?? 0)), row(l.youGet, p.money(e.amountCents), true)] : []),
   ];
-  if (e.kind === "receive" && e.heldCents > 0) lines.push(`<span>${esc(l.held)}: ${esc(p.money(e.heldCents))}</span>`);
-  void STATE_ICON;
-  return `<div class="ay-tip">${lines.join("<br/>")}</div>`;
+  return {
+    class: "ay-tip",
+    children: [
+      { class: `ay-tip-head ay-h-${hue}`, children: [{ tag: "i", class: `fa fa-${ICON[e.kind]}` }, { tag: "b", text: `${e.sign}${p.money(e.amountCents)}` }, { tag: "span", text: kind }] },
+      {
+        class: "ay-tip-group",
+        children: [
+          { tag: "b", text: e.groupName },
+          ...(g
+            ? [
+                { tag: "span", text: `${l.groupState[g.status] ?? g.status} · ${l.freq[g.frequency] ?? g.frequency} · ${g.members} ${l.members} · ${p.money(g.contributionCents)}` },
+                ...(g.rounds > 0 ? [{ class: "ay-tip-bar", children: [{ tag: "i", style: `width:${Math.round((g.paidOutRounds / g.rounds) * 100)}%` }] }, { tag: "span", class: "ay-tip-sub", text: `${l.progress}: ${g.paidOutRounds} / ${g.rounds}${g.myTurn ? ` · ${l.turn} ${g.myTurn}` : ""}` }] : []),
+              ]
+            : []),
+        ],
+      },
+      { class: "ay-tip-rows", children: rows },
+      { tag: "button", class: "ay-tip-open", text: l.open, listeners: { click: () => latest_open(e.groupId) } },
+    ],
+  };
 }

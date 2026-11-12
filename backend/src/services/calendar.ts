@@ -22,6 +22,7 @@ export async function myCalendar(user: User, now = new Date()) {
     name: m.group.name,
     status: m.group.status,
     contributionCents: m.group.contributionCents,
+    frequency: m.group.frequency,
     members: m.group._count.memberships,
     myTurn: m.turn,
     myRetentionPct: m.retentionPct,
@@ -31,7 +32,9 @@ export async function myCalendar(user: User, now = new Date()) {
   }));
   return {
     now: now.toISOString(),
-    groups: groups.map((g) => ({ id: g.id, name: g.name, status: g.status })),
+    // enough for the card of a movement: which pasanaku it is, how big and how far along
+    groups: groups.map((g) => ({ id: g.id, name: g.name, status: g.status, frequency: g.frequency, members: g.members, contributionCents: g.contributionCents, rounds: g.rounds.length, paidOutRounds: g.rounds.filter((r) => r.status === "PAID_OUT").length, myTurn: g.myTurn })),
+
     events: buildPersonalCalendar(groups, now),
   };
 }
