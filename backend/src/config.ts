@@ -49,5 +49,13 @@ export const config = {
     apiKey: mock ? "" : process.env.ANTHROPIC_API_KEY ?? "",
     model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
   },
+  // Any OpenAI-compatible service instead of Claude (Gemini, Groq, OpenRouter, a local Ollama): see ai/llm.ts
+  llm: {
+    baseUrl: mock ? "" : process.env.AI_BASE_URL ?? "",
+    apiKey: process.env.AI_API_KEY ?? "",
+    model: process.env.AI_MODEL ?? "",
+    // "none" / "minimal" / "low": models that think before answering spend the answer's budget (and tokens) on it
+    reasoningEffort: process.env.AI_REASONING_EFFORT ?? "",
+  },
   engineIntervalMs: Number(process.env.ENGINE_INTERVAL_MS ?? 20_000),
 };
