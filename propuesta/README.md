@@ -22,6 +22,8 @@ Cada pieza viene en SVG (en `logos/` y `banners/`) y en PNG (en `png/`).
 | `ayni-logo-vertical-noche` / `-amanecer` | Con el lema "Hoy por ti, mañana por mí.", para portadas y la pantalla final del video |
 | `ayni-icono-app` / `-claro` | Ícono de 1024 × 1024 para la app y la tienda |
 | `ayni-logo-monocromo-tinta` / `-crema` | A una sola tinta: sellos, recibos, impresión en un color |
+| `ayni-logo-vertical-lema-es-noche` / `-amanecer` | Vertical con el lema completo: "Hoy por ti, mañana por mí. Sin límites, sin fronteras." |
+| `ayni-logo-vertical-lema-en-noche` / `-amanecer` | El mismo, en inglés: "Today for you, tomorrow for me. No limits, no borders." (cierre del README) |
 
 ## Banners
 
@@ -33,6 +35,8 @@ Cada pieza viene en SVG (en `logos/` y `banners/`) y en PNG (en `png/`).
 | `ayni-portada-x-1500x500` | 1500 × 500 | Portada de X o LinkedIn |
 | `ayni-redes-1080x1080` | 1080 × 1080 | Publicación cuadrada en Instagram o Facebook |
 | `ayni-video-1920x1080` | 1920 × 1080 | Miniatura y pantalla inicial del video de YouTube |
+| `ayni-readme-es-1280x640` / `-en-` (y `-claro`) | 1280 × 640 | Portada del README con el lema completo, en español e inglés |
+| `ayni-github-social-en`, `ayni-devpost-en`, `ayni-portada-x-en`, `ayni-redes-en`, `ayni-video-en` | iguales a los de arriba | Las mismas piezas en inglés, para Devpost, YouTube y redes |
 
 ## Colores
 

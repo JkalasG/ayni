@@ -130,18 +130,26 @@ def wordmark_only(theme, bg, fname, title):
 wordmark_only(DARK, NIGHT, "logos/ayni-logotipo-noche.svg", "Ayni, solo el logotipo")
 wordmark_only(LIGHT, DAWN, "logos/ayni-logotipo-amanecer.svg", "Ayni, solo el logotipo, versión clara")
 
-def stacked(theme, fname, title):
+def stacked(theme, fname, title, tagline="Hoy por ti, mañana por mí.", second=None):
     W = 640; r = 120
     body = emblem(W / 2, 60 + r, r, theme)
     size = 150
     base = 60 + 2 * r + 70 + UNB_XB.x_height * size
     body += "\n" + text(UNB_XB, "ayni", W / 2, base, size, theme["ink"], "middle", TRACK)
     ty = base + 90
-    body += "\n" + text(FIG_B, "Hoy por ti, mañana por mí.", W / 2, ty, 30, theme["muted"], "middle")
+    body += "\n" + text(FIG_B, tagline, W / 2, ty, 30, theme["muted"], "middle")
+    if second:  # the second half of the slogan, in the brand's warm thread
+        ty += 44
+        body += "\n" + text(FIG_B, second, W / 2, ty, 30, theme["threads"][0], "middle")
     write(fname, svg(W, int(ty + 60), body, theme["bg"], title))
 
 stacked(DARK, "logos/ayni-logo-vertical-noche.svg", "Ayni, logo vertical con lema")
 stacked(LIGHT, "logos/ayni-logo-vertical-amanecer.svg", "Ayni, logo vertical con lema, versión clara")
+# the full slogan, in both languages
+SLOGAN = {"es": ("Hoy por ti, mañana por mí.", "Sin límites, sin fronteras."), "en": ("Today for you, tomorrow for me.", "No limits, no borders.")}
+for lang, (a, b) in SLOGAN.items():
+    stacked(DARK, f"logos/ayni-logo-vertical-lema-{lang}-noche.svg", f"Ayni, logo vertical con el lema completo ({lang})", a, b)
+    stacked(LIGHT, f"logos/ayni-logo-vertical-lema-{lang}-amanecer.svg", f"Ayni, logo vertical con el lema completo ({lang}), versión clara", a, b)
 
 def app_icon(theme, fname, title):
     rect = f'<rect width="1024" height="1024" rx="224" fill="{theme["bg"]}"/>'
@@ -189,7 +197,7 @@ def mountains(width_cells, base_y, peaks):
         pts += [(x, base_y - y) for y in range(max(h, 0))]
     return pts
 
-def banner(W, H, fname, title, headline, sub, chips, layout="left", theme=DARK):
+def banner(W, H, fname, title, headline, sub, chips, layout="left", theme=DARK, scale=1.0):
     light = theme is LIGHT
     ink, muted, th = theme["ink"], theme["muted"], theme["threads"]
     center = layout != "left"
@@ -231,7 +239,7 @@ def banner(W, H, fname, title, headline, sub, chips, layout="left", theme=DARK):
         body.append(lockup(x0, y0, lh, theme)[0])
         ty = y0 + lh + H * 0.16
         anchor, tx = "start", x0
-    fs = H * 0.062 if W / H > 1.2 else H * 0.07
+    fs = (H * 0.062 if W / H > 1.2 else H * 0.07) * scale
     for i, line in enumerate(headline):
         body.append(text(UNB_BLK, line, tx, ty + i * fs * 1.2, fs, ink, anchor))
     sy = ty + (len(headline) - 1) * fs * 1.2 + fs * 0.95
@@ -262,3 +270,22 @@ banner(1080, 1080, "banners/ayni-redes-1080x1080.svg", "Ayni, publicación cuadr
        ["Tu pasanaku,", "tejido con confianza."], ["Pagos con PayPal, garantía y un asistente con IA."], ["PayPal", "Garantía", "IA"], layout="center")
 banner(1920, 1080, "banners/ayni-video-1920x1080.svg", "Ayni, portada del video",
        ["Ayni en 3 minutos"], ["Un pasanaku completo con PayPal: pagar, cubrir con garantía, recibir el pozo."], CHIPS, layout="center")
+
+# ---------------------------------------------------------------- the slogan banners (README) and the English set
+CHIPS_EN = ["Payments with PayPal", "A guarantee that protects the group", "AI that explains"]
+SUB = {"es": "Pasanakus sobre PayPal y Claude, en cualquier país.",
+       "en": "Rotating savings circles on PayPal and Claude, in any country."}
+for lang, chips in (("es", ["Pagos con PayPal", "Garantía del grupo", "IA que explica"]), ("en", ["PayPal payments", "Group guarantee", "AI that explains"])):
+    a, b = SLOGAN[lang]
+    banner(1280, 640, f"banners/ayni-readme-{lang}-1280x640.svg", f"Ayni, portada del README ({lang})", [a, b], [SUB[lang]], chips, scale=0.84)
+    banner(1280, 640, f"banners/ayni-readme-{lang}-claro-1280x640.svg", f"Ayni, portada del README ({lang}), versión clara", [a, b], [SUB[lang]], chips, theme=LIGHT, scale=0.84)
+banner(1280, 640, "banners/ayni-github-social-en-1280x640.svg", "Ayni, GitHub banner",
+       ["The savings circle you know,", "with PayPal and without fear."], ["Rotating savings among people who trust each other, at home and abroad."], CHIPS_EN)
+banner(1500, 500, "banners/ayni-portada-x-en-1500x500.svg", "Ayni, cover for X and LinkedIn",
+       ["Today for you, tomorrow for me."], ["No limits, no borders. Savings circles on PayPal."], CHIPS_EN, scale=0.9)
+banner(1200, 800, "banners/ayni-devpost-en-1200x800.svg", "Ayni, Devpost cover",
+       ["Savings circles on PayPal + AI"], ["Today for you, tomorrow for me. No limits, no borders."], CHIPS_EN[:2], layout="center")
+banner(1080, 1080, "banners/ayni-redes-en-1080x1080.svg", "Ayni, square post",
+       ["Your savings circle,", "woven with trust."], ["PayPal payments, a guarantee and an AI assistant."], ["PayPal", "Guarantee", "AI"], layout="center")
+banner(1920, 1080, "banners/ayni-video-en-1920x1080.svg", "Ayni, video cover",
+       ["Ayni in 3 minutes"], ["A full savings circle on PayPal: pay, cover with the guarantee, receive the pot."], CHIPS_EN, layout="center")
