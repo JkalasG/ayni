@@ -15,18 +15,26 @@ import { WovenAvatar } from "@/components/woven-avatar";
 import { Emblem } from "@/components/brand";
 
 /** Page container. Phones: full width with gutters. Wide web: a calm reading column. */
-export function Screen({ children, scroll = true, width = 640 }: { children: ReactNode; scroll?: boolean; width?: number }) {
+/**
+ * The frame of a screen. On a phone: one centered column. On a computer: the content starts at the same left edge as
+ * the page title and the group's menu (a 1240 px frame), instead of floating as a narrow column in the middle;
+ * `width` is how wide the content itself may get (text and forms stay readable, tables ask for the whole frame).
+ */
+export function Screen({ children, scroll = true, width }: { children: ReactNode; scroll?: boolean; width?: number }) {
   const { wide } = useLayout();
   const { c } = useScheme();
-  const inner: ViewStyle = { width: "100%", alignSelf: "center", gap: space(5), maxWidth: width, paddingHorizontal: wide ? space(10) : space(4) };
+  const frame: ViewStyle = wide
+    ? { width: "100%", alignSelf: "center", maxWidth: 1240 + space(20), paddingHorizontal: space(10) }
+    : { width: "100%", alignSelf: "center", gap: space(5), maxWidth: width ?? 640, paddingHorizontal: space(4) };
+  const body = wide ? <View style={[{ width: "100%", maxWidth: width ?? 780, gap: space(5) }, !scroll && { flex: 1 }]}>{children}</View> : children;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={[]}>
       {scroll ? (
-        <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ paddingTop: wide ? space(8) : space(4), paddingBottom: space(16) }} keyboardShouldPersistTaps="handled">
-          <View style={inner}>{children}</View>
+        <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ paddingTop: wide ? space(6) : space(4), paddingBottom: space(16) }} keyboardShouldPersistTaps="handled">
+          <View style={frame}>{body}</View>
         </ScrollView>
       ) : (
-        <View style={[inner, { flex: 1, paddingTop: space(4) }]}>{children}</View>
+        <View style={[frame, { flex: 1, paddingTop: space(4) }]}>{body}</View>
       )}
     </SafeAreaView>
   );
