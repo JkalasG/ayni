@@ -203,12 +203,12 @@ export function LinkRow({ title, hint, onPress, last }: { title: string; hint?: 
   );
 }
 
-export function Field({ label, hint, ...props }: TextInputProps & { label: string; hint?: string }) {
+export function Field({ label, hint, error, ...props }: TextInputProps & { label: string; hint?: string; error?: string | null }) {
   const { c } = useScheme();
   return (
     <View style={{ gap: space(1.5) }}>
       <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.ink }}>{label}</Text>
-      <SteppedBox fill={c.surface} stroke={c.line} step={3} style={{ minHeight: props.multiline ? 96 : 50 }}>
+      <SteppedBox fill={c.surface} stroke={error ? c.rojo.fill : c.line} step={3} style={{ minHeight: props.multiline ? 96 : 50 }}>
         <TextInput
           placeholderTextColor={c.muted}
           style={[
@@ -229,7 +229,13 @@ export function Field({ label, hint, ...props }: TextInputProps & { label: strin
           {...props}
         />
       </SteppedBox>
-      {hint ? <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 19, color: c.muted }}>{hint}</Text> : null}
+      {error ? (
+        <Text accessibilityRole="alert" style={{ fontFamily: fonts.bodyBold, fontSize: 14, lineHeight: 19, color: c.rojo.text }}>
+          {error}
+        </Text>
+      ) : hint ? (
+        <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 19, color: c.muted }}>{hint}</Text>
+      ) : null}
     </View>
   );
 }
@@ -261,6 +267,48 @@ export function Chips<T extends string>({
             </Pressable>
           );
         })}
+      </View>
+    </View>
+  );
+}
+
+/** On/off switch in the cloth's language: a square stitch that slides, fucsia when on. The whole row is the target. */
+export function Toggle({ label, hint, value, onChange }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void }) {
+  const { c } = useScheme();
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: value }}
+      onPress={() => onChange(!value)}
+      style={({ focused }: any) => [
+        { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, minHeight: 48 },
+        focused && ({ outlineColor: c.ink, outlineWidth: 2, outlineStyle: "solid", outlineOffset: 2 } as any),
+      ]}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, lineHeight: 21, color: c.ink }}>{label}</Text>
+        {hint ? <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 19, color: c.muted }}>{hint}</Text> : null}
+      </View>
+      <SteppedBox fill={value ? c.fucsia.fill : c.surface} stroke={value ? c.fucsia.fill : c.muted} step={3} style={{ width: 56, height: 32, padding: 5, alignItems: value ? "flex-end" : "flex-start", justifyContent: "center" }}>
+        <View style={{ width: 22, height: 22, backgroundColor: value ? c.onAction : c.muted }} />
+      </SteppedBox>
+    </Pressable>
+  );
+}
+
+/** A screen that could not load: say so, and offer to try again instead of spinning forever. */
+export function LoadError({ text, retry, onRetry, back, onBack }: { text: string; retry: string; onRetry: () => void; back?: string; onBack?: () => void }) {
+  const { c } = useScheme();
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.bg, gap: space(4), padding: space(6) }}>
+      <Emblem size={64} />
+      <Text accessibilityRole="alert" style={{ fontFamily: fonts.body, fontSize: 16.5, lineHeight: 24, color: c.ink, textAlign: "center", maxWidth: 340 }}>
+        {text}
+      </Text>
+      <View style={{ gap: space(2), width: "100%", maxWidth: 280 }}>
+        <Button title={retry} onPress={onRetry} />
+        {back && onBack ? <Button kind="ghost" title={back} onPress={onBack} /> : null}
       </View>
     </View>
   );

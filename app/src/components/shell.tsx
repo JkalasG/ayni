@@ -17,9 +17,13 @@ type GroupRow = { id: string; name: string; status: string };
 const TABS: { key: string; href: string; icon: IconName; label: Key; match: (p: string) => boolean }[] = [
   { key: "groups", href: "/groups", icon: "grupos", label: "tabGroups", match: (p) => p.startsWith("/groups") },
   { key: "explore", href: "/explore", icon: "explorar", label: "tabExplore", match: (p) => p.startsWith("/explore") },
+  { key: "payments", href: "/payments", icon: "pagar", label: "tabPayments", match: (p) => p === "/payments" },
   { key: "passport", href: "/profile", icon: "pasaporte", label: "tabPassport", match: (p) => p.startsWith("/profile") },
   { key: "alerts", href: "/notifications", icon: "avisos", label: "tabAlerts", match: (p) => p.startsWith("/notifications") },
 ];
+
+/** Screens a signed-out person may see; every other screen sends them back to the welcome page. */
+const PUBLIC = (p: string) => p === "/" || p.startsWith("/auth") || p.startsWith("/demo");
 
 /** Screens that own the whole viewport (welcome, PayPal return, chat with its composer). */
 const NO_NAV = (p: string) => p === "/" || p.startsWith("/auth") || p.startsWith("/demo") || p.endsWith("/chat");
@@ -46,10 +50,15 @@ function useUnread() {
  */
 export function Shell({ children }: { children: ReactNode }) {
   const { wide } = useLayout();
-  const { me } = useAuth();
+  const { me, loading } = useAuth();
   const { c } = useScheme();
   const path = usePathname();
-  const nav = !!me && !NO_NAV(path);
+  // the chat owns the whole screen on a phone (keyboard and composer); on a computer the sidebar stays, like in every other view of the group
+  const nav = !!me && !(NO_NAV(path) && !(wide && path.endsWith("/chat")));
+  // Signing out (or an expired session) while on a private screen: go to the welcome page instead of waiting forever.
+  useEffect(() => {
+    if (!loading && !me && !PUBLIC(path)) router.replace("/");
+  }, [loading, me, path]);
   return (
     <View style={{ flex: 1, flexDirection: "row", backgroundColor: c.bg }}>
       {wide && nav ? <Sidebar /> : null}
@@ -189,7 +198,7 @@ function Sidebar() {
                 key={g.id}
                 accessibilityRole="link"
                 accessibilityState={{ selected: active }}
-                onPress={() => router.navigate(`/groups/${g.id}`)}
+                onPress={() => router.push(`/groups/${g.id}`)}
                 style={({ hovered }: any) => ({
                   minHeight: 42,
                   paddingHorizontal: 14,

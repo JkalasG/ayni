@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Field, Loading, Notice } from "@/components/ui";
+import { Button, Field, LoadError, Loading, Notice } from "@/components/ui";
 import { AguayoBand, type Motif } from "@/components/aguayo";
 import { Icon } from "@/components/icons";
 import { SteppedBox } from "@/components/stepped";
@@ -13,7 +13,8 @@ import { useI18n, type Key } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
-import { api, ApiError, money } from "@/lib/api";
+import { api, money } from "@/lib/api";
+import { errorText } from "@/lib/errors";
 import { openPayPal, returnUrl } from "@/lib/pay";
 import { PayPalWordmark } from "@/components/paypal";
 import { fonts, space, type Palette } from "@/lib/theme";
@@ -59,15 +60,17 @@ function requirements(g: OpenGroup, p: TrustProfile, t: (k: Key) => string) {
 
 /** "Cumples todo" or exactly what is missing, in one line. */
 function verdict(g: OpenGroup, p: TrustProfile, t: (k: Key) => string, c: Palette) {
+  // Someone who is already in does not need to hear what they would lack to get in.
+  if (g.isMember) return { text: t("alreadyMember"), color: c.verde.text, ok: true };
   if (g.check.meets) return { text: t("youMeetAll"), color: c.verde.text, ok: true };
   const f = g.check.failures;
   if (f.includes("min_completed") && f.length === 1) {
     const n = g.rules.minCompleted - p.completed;
-    return { text: `${t("youLack")} ${n} ${n === 1 ? t("needCompletedOne") : t("needCompletedMany")}`, color: c.naranja.text, ok: false };
+    return { text: `${n === 1 ? t("youLack") : t("youLackMany")} ${n} ${n === 1 ? t("needCompletedOne") : t("needCompletedMany")}`, color: c.naranja.text, ok: false };
   }
   if (f.includes("min_on_time") && f.length === 1) return { text: `${t("youLack")} ${g.rules.minOnTimePct}% ${t("onTimeShort")}`, color: c.naranja.text, ok: false };
   if (g.check.borderline) return { text: t("borderline"), color: c.naranja.text, ok: false };
-  return { text: `${t("youLack")} ${f.length} ${f.length === 1 ? t("requirement") : t("requirements")}`, color: c.rojo.text, ok: false };
+  return { text: `${f.length === 1 ? t("youLack") : t("youLackMany")} ${f.length} ${f.length === 1 ? t("requirement") : t("requirements")}`, color: c.rojo.text, ok: false };
 }
 
 export default function Explore() {
@@ -83,15 +86,20 @@ export default function Explore() {
   const [country, setCountry] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [banner, setBanner] = useState<string | null>(null);
+  const [banner, setBannerState] = useState<{ text: string; tone: "ok" | "info" | "error" } | null>(null);
+  const setBanner = (text: string | null, tone: "ok" | "info" | "error" = "ok") => setBannerState(text ? { text, tone } : null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const load = useCallback(async () => setData(await api("/explore")), []);
+  const load = useCallback(async () => {
+    setData(await api("/explore"));
+    setLoadError(null);
+  }, []);
+  const firstLoad = useCallback(() => {
+    setLoadError(null);
+    load().catch((e) => setLoadError(errorText(e, t)));
+  }, [load, t]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load().catch(() => {});
-    }, [load])
-  );
+  useFocusEffect(firstLoad);
 
   useEffect(() => {
     if (!loading && !me) router.replace("/");
@@ -100,8 +108,8 @@ export default function Explore() {
   // Web comes back from PayPal with ?status=deposit|cancelled|error
   useEffect(() => {
     if (status === "deposit") setBanner(t("depositDone"));
-    else if (status === "cancelled") setBanner(t("paymentCancel"));
-    else if (status === "error") setBanner(t("paymentError"));
+    else if (status === "cancelled") setBanner(t("paymentCancel"), "info");
+    else if (status === "error") setBanner(t("paymentError"), "error");
   }, [status, t]);
 
   const shown = useMemo(() => {
@@ -138,8 +146,8 @@ export default function Explore() {
       if (res.approveUrl) {
         const r = await openPayPal(res.approveUrl, redirect);
         if (r === "deposit") setBanner(t("depositDone"));
-        else if (r === "cancelled") setBanner(t("paymentCancel"));
-        else if (r === "error") setBanner(t("paymentError"));
+        else if (r === "cancelled") setBanner(t("paymentCancel"), "info");
+        else if (r === "error") setBanner(t("paymentError"), "error");
       } else {
         setBanner(t(`req_${res.request.status}` as Key));
       }
@@ -147,13 +155,19 @@ export default function Explore() {
       setOpen(null);
       await load();
     } catch (e) {
-      setBanner(e instanceof ApiError ? e.code : String(e));
+      setBanner(errorText(e, t), "error");
     } finally {
       setBusy(false);
     }
   };
 
-  if (!data) return <Loading />;
+  if (!data)
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        {loadError ? <LoadError text={loadError} retry={t("retry")} onRetry={firstLoad} /> : <Loading />}
+      </>
+    );
 
   const filters: { value: Filter; label: string }[] = [
     { value: "all", label: t("filterAll") },
@@ -195,7 +209,8 @@ export default function Explore() {
 
   const card = (g: OpenGroup, i: number) => {
     const v = verdict(g, data.profile, t, c);
-    const reqs = requirements(g, data.profile, t);
+    // the entry requirements only matter to someone who is not in yet
+    const reqs = g.isMember ? [] : requirements(g, data.profile, t);
     const expanded = open === g.id;
     const req = g.myRequest;
     const canRequest = !g.isMember && (!req || req.status === "REJECTED" || req.status === "CANCELLED" || req.status === "AWAITING_DEPOSIT");
@@ -251,7 +266,7 @@ export default function Explore() {
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", borderTopWidth: 1, borderColor: c.line, paddingTop: space(3) }}>
             <View style={{ flex: 1, minWidth: 140, gap: 2 }}>
-              <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: req ? c.muted : v.color }}>{req ? t(`req_${req.status}` as Key) : v.text}</Text>
+              <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: req && !g.isMember ? c.muted : v.color }}>{req && !g.isMember ? t(`req_${req.status}` as Key) : v.text}</Text>
             </View>
             {g.isMember ? (
               <Button compact kind="secondary" title={t("openGroupBtn")} onPress={() => router.push(`/groups/${g.id}`)} />
@@ -305,7 +320,7 @@ export default function Explore() {
               );
             })}
           </ScrollView>
-          {banner && <Notice tone="ok">{banner}</Notice>}
+          {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
           {shown.length === 0 ? (
             <Text style={{ fontFamily: fonts.body, fontSize: 16, color: c.muted, paddingVertical: space(6) }}>{data.groups.length === 0 ? t("noOpenGroups") : t("noMatches")}</Text>
           ) : (

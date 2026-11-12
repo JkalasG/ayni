@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Redirect, Stack, router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Badge, Button } from "@/components/ui";
+import { Badge, Button, LoadError, Loading } from "@/components/ui";
 import { AguayoBand, type Motif } from "@/components/aguayo";
 import { Controls } from "@/components/controls";
 import { Logo } from "@/components/brand";
@@ -13,6 +13,7 @@ import { useI18n, type Key } from "@/lib/i18n";
 import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { api, money } from "@/lib/api";
+import { errorText } from "@/lib/errors";
 import { fonts, space, type Palette } from "@/lib/theme";
 
 type GroupRow = {
@@ -49,16 +50,18 @@ export default function Groups() {
   const [groups, setGroups] = useState<GroupRow[] | null>(null);
   const [mine, setMine] = useState<Record<string, Mine>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setGroups(await api<GroupRow[]>("/groups"));
+    setLoadError(null);
   }, []);
+  const firstLoad = useCallback(() => {
+    setLoadError(null);
+    load().catch((e) => setLoadError(errorText(e, t)));
+  }, [load, t]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load().catch(() => {});
-    }, [load])
-  );
+  useFocusEffect(firstLoad);
 
   // details for the tiles, one group at a time (read only, same endpoint as the group screen)
   useEffect(() => {
@@ -80,6 +83,13 @@ export default function Groups() {
   }, [groups]);
 
   if (!me) return <Redirect href="/" />;
+  if (!groups)
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        {loadError ? <LoadError text={loadError} retry={t("retry")} onRetry={firstLoad} back={t("logout")} onBack={logout} /> : <Loading />}
+      </>
+    );
 
   const active = (groups ?? []).filter((g) => !closed(g.status));
   const finished = (groups ?? []).filter((g) => closed(g.status));

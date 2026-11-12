@@ -5,6 +5,7 @@ import type { Key } from "@/lib/i18n";
 import { LedgerList, LedgerSummary, type LedgerEntry } from "@/components/ledger";
 import { useI18n } from "@/lib/i18n";
 import { api, money } from "@/lib/api";
+import { useLayout } from "@/lib/layout";
 
 type Ledger = {
   isOrganizer: boolean;
@@ -27,6 +28,7 @@ type Recon = {
 export default function GroupPayments() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, lang } = useI18n();
+  const { wide } = useLayout();
   const [data, setData] = useState<Ledger | null>(null);
   const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
@@ -44,11 +46,11 @@ export default function GroupPayments() {
 
   const title = <Stack.Screen options={{ title: t("payments") }} />;
   if (failed) return <Screen>{title}<Notice tone="error">{t("loadFailed")}</Notice></Screen>;
-  if (!data) return <Loading />;
+  if (!data) return <>{title}<Loading /></>;
 
   const shown = data.entries.filter((e) => (filter === "mine" ? e.mine : filter === "all" ? true : e.direction === filter));
   return (
-    <Screen>
+    <Screen width={wide ? 1240 : 640}>
       {title}
       <P muted>{t("paymentsHint")}</P>
       <LedgerSummary
@@ -70,9 +72,7 @@ export default function GroupPayments() {
             <P muted>{recon.available ? t("rcNever") : t("rcUnavailable")}</P>
           ) : (
             <>
-              <P>
-                {recon.matched} / {recon.checked} {t("rcOk")}
-              </P>
+              <P>{recon.checked === 0 ? t("rcNothing") : `${recon.matched} / ${recon.checked} ${t("rcOk")}`}</P>
               {(recon.issueCount ?? recon.issues.length) > 0 && <Notice tone="error">{`${recon.issueCount ?? recon.issues.length} ${t("rcIssues")}`}</Notice>}
               {recon.issues.map((i) => (
                 <P key={i.captureId} muted>
@@ -81,7 +81,7 @@ export default function GroupPayments() {
                 </P>
               ))}
               <P muted style={{ fontSize: 13.5 }}>
-                {t("rcWhen")}: {new Date(recon.ranAt).toLocaleString(lang === "en" ? "en-US" : "es-BO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. {t("rcLag")}
+                {t("rcWhen")}: {new Date(recon.ranAt).toLocaleString(lang === "en" ? "en-US" : "es-BO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(/\.$/, "")}. {t("rcLag")}
               </P>
             </>
           )}

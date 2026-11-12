@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useScheme } from "@/lib/scheme";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Badge, Card, H2, Loading, P, Screen } from "@/components/ui";
+import { Badge, Card, H2, Loading, Notice, P, Screen } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { api, ApiError } from "@/lib/api";
 import { colors } from "@/lib/theme";
@@ -12,7 +12,7 @@ type Dispute = { id: string; reason: string; status: string; amount: string; mem
 export default function Disputes() {
   useScheme(); // re-render when the color mode changes
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [data, setData] = useState<{ disputes: Dispute[]; summary: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,8 +24,8 @@ export default function Disputes() {
     }, [id])
   );
 
-  if (error) return <Screen><Stack.Screen options={{ title: t("disputes") }} /><P style={{ color: colors.danger }}>{error === "organizer_only" ? t("organizerOnly") : t("loadFailed")}</P></Screen>;
-  if (!data) return <Loading />;
+  if (error) return <Screen><Stack.Screen options={{ title: t("disputes") }} /><Notice tone="error">{error === "organizer_only" ? t("organizerOnly") : t("loadFailed")}</Notice></Screen>;
+  if (!data) return <><Stack.Screen options={{ title: t("disputes") }} /><Loading /></>;
   return (
     <Screen>
       <Stack.Screen options={{ title: t("disputes") }} />
@@ -42,8 +42,8 @@ export default function Disputes() {
           <P>
             ${d.amount} · {d.reason}
           </P>
-          <P muted style={{ fontSize: 12 }}>
-            {d.id} · {new Date(d.createdAt).toLocaleString()}
+          <P muted style={{ fontSize: 13.5 }}>
+            {d.id} · {new Date(d.createdAt).toLocaleString(lang === "en" ? "en-US" : "es-BO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
           </P>
         </Card>
       ))}

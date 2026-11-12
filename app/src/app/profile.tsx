@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, Share, Text, View } from "react-native
 import { Stack, router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
-import { LinkRow, Loading, Notice, Weave } from "@/components/ui";
+import { LinkRow, LoadError, Loading, Notice, Weave } from "@/components/ui";
 import { Icon } from "@/components/icons";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar, WovenEmblem } from "@/components/woven-avatar";
@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { api } from "@/lib/api";
+import { errorText } from "@/lib/errors";
 import { getValue, setValue } from "@/lib/flags";
 import { ACHIEVEMENTS, LEVELS, levelOf, type Profile } from "@/lib/levels";
 import { fonts, space, type Palette } from "@/lib/theme";
@@ -28,11 +29,14 @@ export default function Passport() {
   const [levelUp, setLevelUp] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      api<Profile>("/me/profile").then(setP).catch(() => {});
-    }, [])
-  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const load = useCallback(() => {
+    setLoadError(null);
+    api<Profile>("/me/profile")
+      .then(setP)
+      .catch((e) => setLoadError(errorText(e, t)));
+  }, [t]);
+  useFocusEffect(load);
 
   // A level reached since the last visit on this device gets its moment.
   useEffect(() => {
@@ -45,7 +49,13 @@ export default function Passport() {
     });
   }, [p, me]);
 
-  if (!p || !me) return <Loading />;
+  if (!p || !me)
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        {loadError && me ? <LoadError text={loadError} retry={t("retry")} onRetry={load} /> : <Loading />}
+      </>
+    );
 
   const { level, next, missing } = levelOf(p);
   const locale = lang === "en" ? "en-US" : "es-BO";

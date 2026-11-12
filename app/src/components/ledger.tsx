@@ -2,11 +2,14 @@
  * Payment history: one row per PayPal movement, grouped by day, newest first.
  * The server already decided what this person may see; this file only draws it.
  */
+import type { ReactNode } from "react";
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/icons";
 import { SteppedBox } from "@/components/stepped";
 import { money } from "@/lib/api";
 import { useI18n, type Key } from "@/lib/i18n";
+import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { fonts, space, type Palette } from "@/lib/theme";
 
@@ -62,18 +65,29 @@ export function LedgerSummary({ items }: { items: { label: string; cents: number
  */
 export function LedgerList({ entries, locale, personal, onReport }: { entries: LedgerEntry[]; locale: string; personal?: boolean; onReport?: (contributionId: string) => void }) {
   const { c } = useScheme();
+  const { wide } = useLayout();
+  // The table needs room for its seven columns: in a narrower space the same record is the list by day.
+  const [width, setWidth] = useState<number | null>(null);
+  if (wide && (width == null || width >= 900))
+    return (
+      <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        <LedgerTable entries={entries} locale={locale} personal={personal} onReport={onReport} />
+      </View>
+    );
   const days: { label: string; rows: LedgerEntry[] }[] = [];
   for (const e of entries) {
-    const label = new Date(e.at).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
+    const at = new Date(e.at);
+    const raw = at.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", ...(at.getFullYear() !== new Date().getFullYear() ? { year: "numeric" as const } : {}) });
+    const label = raw.charAt(0).toUpperCase() + raw.slice(1);
     const last = days[days.length - 1];
     if (last && last.label === label) last.rows.push(e);
     else days.push({ label, rows: [e] });
   }
   return (
-    <View style={{ gap: space(5) }}>
+    <View style={{ gap: space(5) }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {days.map((d) => (
         <View key={d.label} style={{ gap: space(1) }}>
-          <Text accessibilityRole="header" style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: c.muted, textTransform: "capitalize" }}>
+          <Text accessibilityRole="header" style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: c.muted }}>
             {d.label}
           </Text>
           <SteppedBox fill={c.surface} stroke={c.line} step={4} style={{ paddingHorizontal: space(4) }}>
@@ -84,6 +98,105 @@ export function LedgerList({ entries, locale, personal, onReport }: { entries: L
         </View>
       ))}
     </View>
+  );
+}
+
+/** Wide screens: the record as a table, one line per movement, so dates, amounts and states line up. */
+function LedgerTable({ entries, locale, personal, onReport }: { entries: LedgerEntry[]; locale: string; personal?: boolean; onReport?: (contributionId: string) => void }) {
+  const { c } = useScheme();
+  const { t } = useI18n();
+  const W = { date: 100, concept: 236, status: 122, ref: 150, fee: 80, amount: 106 };
+  const head = { fontFamily: fonts.bodyBold, fontSize: 13, color: c.muted, letterSpacing: 0.3, textTransform: "uppercase" as const };
+  const cols = (cells: [number | undefined, ReactNode, "left" | "right"][], bg?: string, border?: boolean) => (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: space(4), paddingHorizontal: space(4), paddingVertical: space(3), backgroundColor: bg, borderBottomWidth: border ? 1 : 0, borderColor: c.line }}>
+      {cells.map(([w, node, align], i) => (
+        <View key={i} style={{ width: w, flex: w ? undefined : 1, minWidth: 0, alignItems: align === "right" ? "flex-end" : "flex-start" }}>
+          {node}
+        </View>
+      ))}
+    </View>
+  );
+  return (
+    <SteppedBox fill={c.surface} stroke={c.line} step={5} style={{ overflow: "hidden" }}>
+      {cols(
+        [
+          [W.date, <Text style={head}>{t("lgColDate")}</Text>, "left"],
+          [W.concept, <Text style={head}>{t("lgColConcept")}</Text>, "left"],
+          [undefined, <Text style={head}>{personal ? t("lgColGroup") : t("lgColMember")}</Text>, "left"],
+          [W.status, <Text style={head}>{t("lgColStatus")}</Text>, "left"],
+          [W.ref, <Text style={head}>{t("lgColRef")}</Text>, "left"],
+          [W.fee, <Text style={head}>{t("lgColFee")}</Text>, "right"],
+          [W.amount, <Text style={head}>{t("lgColAmount")}</Text>, "right"],
+        ],
+        c.surfaceAlt,
+        true
+      )}
+      {entries.map((e, i) => {
+        const look = LOOK[e.type];
+        const failed = e.status === "FAILED";
+        const tone = failed ? c.rojo : c[look.tone];
+        const at = new Date(e.at);
+        const who = personal ? e.groupName ?? "" : e.mine ? `${e.memberName} (${t("you")})` : e.memberName;
+        const sign = !personal || e.direction === "none" ? "" : e.direction === "in" ? "− " : "+ ";
+        const st = failed ? { text: t("lgStFailed"), color: c.rojo.text } : e.status === "IN_PROGRESS" ? { text: t("lgStProgress"), color: c.naranja.text } : { text: t("lgStDone"), color: c.verde.text };
+        const title = `${t(`lg_${e.type}` as Key)}${e.round ? `, ${t("round").toLowerCase()} ${e.round}` : ""}`;
+        return (
+          <View key={e.id} accessible accessibilityLabel={`${title}, ${who}, ${money(e.amountCents)}, ${st.text}`}>
+            {cols(
+              [
+                [
+                  W.date,
+                  <View>
+                    <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.ink }}>{at.toLocaleDateString(locale, { day: "numeric", month: "short", ...(at.getFullYear() !== new Date().getFullYear() ? { year: "numeric" as const } : {}) })}</Text>
+                    <Text style={{ fontFamily: fonts.body, fontSize: 13, color: c.muted }}>{at.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</Text>
+                  </View>,
+                  "left",
+                ],
+                [
+                  W.concept,
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", backgroundColor: tone.fill + "26" }}>
+                      <Icon name={look.icon} size={17} color={tone.text} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: c.ink }}>{title}</Text>
+                      {e.lateFeeCents > 0 ? <Text style={{ fontFamily: fonts.body, fontSize: 13, color: c.muted }}>{t("lgLateFee")} {money(e.lateFeeCents)}</Text> : null}
+                      {onReport && e.mine && e.type === "CONTRIBUTION" && e.id.startsWith("c_") ? (
+                        <Pressable accessibilityRole="button" onPress={() => onReport(e.id.slice(2))}>
+                          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13, color: c.fucsia.text }}>{t("clReport")}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>,
+                  "left",
+                ],
+                [undefined, <Text numberOfLines={2} style={{ fontFamily: fonts.body, fontSize: 14.5, lineHeight: 19, color: c.ink }}>{who}</Text>, "left"],
+                [
+                  W.status,
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                    <View style={{ width: 8, height: 8, transform: [{ rotate: "45deg" }], backgroundColor: st.color }} />
+                    <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: st.color }}>{st.text}</Text>
+                  </View>,
+                  "left",
+                ],
+                [W.ref, e.ref ? <Text selectable numberOfLines={1} style={{ fontFamily: fonts.body, fontSize: 13, color: c.muted }}>{e.ref}</Text> : <Text style={{ fontFamily: fonts.body, fontSize: 13, color: c.muted }}>{e.direction === "none" ? t("lgNoPaypal") : "—"}</Text>, "left"],
+                [W.fee, <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted, fontVariant: ["tabular-nums"] }}>{e.feeCents != null ? money(e.feeCents) : "—"}</Text>, "right"],
+                [
+                  W.amount,
+                  <Text style={{ fontFamily: fonts.display, fontSize: 15.5, color: failed ? c.muted : c.ink, fontVariant: ["tabular-nums"], textDecorationLine: e.type === "UNPAID" ? "line-through" : "none" }}>
+                    {sign}
+                    {money(e.amountCents)}
+                  </Text>,
+                  "right",
+                ],
+              ],
+              i % 2 ? c.surfaceAlt : undefined,
+              i < entries.length - 1
+            )}
+          </View>
+        );
+      })}
+    </SteppedBox>
   );
 }
 

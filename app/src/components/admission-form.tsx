@@ -1,7 +1,6 @@
-import { Switch, Text, View } from "react-native";
-import { Chips, Field } from "@/components/ui";
+import { View } from "react-native";
+import { Chips, Field, Toggle } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
-import { colors, fonts } from "@/lib/theme";
 
 export type AdmissionMode = "MANUAL" | "AUTO" | "AI";
 
@@ -58,15 +57,6 @@ export function fromGroup(g: any): AdmissionValues {
     acceptNewcomers: g.acceptNewcomers ?? true,
     requireDeposit: g.requireDeposit ?? true,
   };
-}
-
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <Text style={{ color: colors.ink, fontFamily: fonts.bodyBold, flex: 1 }}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary }} />
-    </View>
-  );
 }
 
 export function AdmissionForm({ value, onChange }: { value: AdmissionValues; onChange: (v: AdmissionValues) => void }) {

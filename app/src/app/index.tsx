@@ -26,6 +26,8 @@ type DemoUser = { id: string; name: string; email: string };
 const DEMO_HINT: Record<string, Key> = {
   "Doña Rosa": "hintRosa",
   Marisol: "hintMarisol",
+  "Juan Carlos": "hintJuan",
+  "Don Efraín": "hintEfrain",
   "Tomás": "hintTomas",
   Kusi: "hintKusi",
 };

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useScheme } from "@/lib/scheme";
 import { Text, View } from "react-native";
 import { Stack, useFocusEffect } from "expo-router";
-import { H1, Notice, Screen } from "@/components/ui";
+import { Button, H1, Notice, Screen } from "@/components/ui";
 import { Icon, type IconName } from "@/components/icons";
 import { SteppedBox } from "@/components/stepped";
 import { useI18n, type Key } from "@/lib/i18n";
@@ -20,11 +20,15 @@ const KIND: Record<string, { color: () => string; icon: IconName }> = {
   mediation: { color: () => colors.magenta, icon: "chat" },
 };
 
+/** A long history must not bury the newest notices: show this many, the rest on request. */
+const PAGE = 20;
+
 export default function Notifications() {
   useScheme(); // re-render when the color mode changes
   const { t, lang } = useI18n();
   const { wide } = useLayout();
   const [items, setItems] = useState<N[]>([]);
+  const [shown, setShown] = useState(PAGE);
 
   useFocusEffect(
     useCallback(() => {
@@ -39,11 +43,11 @@ export default function Notifications() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: t("notifications") }} />
+      <Stack.Screen options={{ title: t("notifications"), headerShown: !wide }} />
       {wide && <H1>{t("notifications")}</H1>}
       {items.length === 0 && <Notice>{t("noNotifications")}</Notice>}
       <View style={{ gap: space(3) }}>
-        {items.map((n) => {
+        {items.slice(0, shown).map((n) => {
           const k = KIND[n.kind];
           const col = k?.color() ?? colors.inkSoft;
           return (
@@ -67,6 +71,7 @@ export default function Notifications() {
           );
         })}
       </View>
+      {items.length > shown && <Button kind="secondary" title={`${t("showOlder")} (${items.length - shown})`} onPress={() => setShown((n) => n + PAGE)} />}
     </Screen>
   );
 }

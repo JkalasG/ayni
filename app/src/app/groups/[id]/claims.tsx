@@ -74,7 +74,7 @@ export default function Claims() {
 
   const title = <Stack.Screen options={{ title: t("claims") }} />;
   if (failed) return <Screen>{title}<Notice tone="error">{t("loadFailed")}</Notice></Screen>;
-  if (!data) return <Loading />;
+  if (!data) return <>{title}<Loading /></>;
   const locale = lang === "en" ? "en-US" : "es-BO";
   const tone = (s: Claim["status"]) => ({ OPEN: c.naranja.text, REFUNDING: c.turquesa.text, REFUNDED: c.verde.text, REJECTED: c.muted, ESCALATED: c.fucsia.text, RESOLVED: c.verde.text })[s];
 

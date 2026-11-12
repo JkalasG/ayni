@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useScheme } from "@/lib/scheme";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { Button, Field, FormHeader, P, Screen } from "@/components/ui";
+import { Button, Field, FormHeader, Notice, Screen } from "@/components/ui";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { api, ApiError } from "@/lib/api";
-import { colors } from "@/lib/theme";
+import { api } from "@/lib/api";
+import { errorText } from "@/lib/errors";
 
 /** Also reachable as a link: ayni://join?code=ABC123 or https://<web>/join?code=ABC123 */
 export default function Join() {
@@ -26,10 +26,10 @@ export default function Join() {
     setBusy(true);
     setError(null);
     try {
-      const g = await api<{ id: string }>("/groups/join", { body: { code } });
+      const g = await api<{ id: string }>("/groups/join", { body: { code: code.trim() } });
       router.replace(`/groups/${g.id}`);
     } catch (e) {
-      setError(e instanceof ApiError ? e.code : String(e));
+      setError(errorText(e, t));
     } finally {
       setBusy(false);
     }
@@ -42,12 +42,18 @@ export default function Join() {
       <Field
         label={t("code")}
         value={code}
-        onChangeText={(v) => setCode(v.toUpperCase())}
+        onChangeText={(v) => {
+          setCode(v.toUpperCase().replace(/\s/g, ""));
+          setError(null);
+        }}
+        autoCorrect={false}
+        returnKeyType="go"
+        onSubmitEditing={() => code.length >= 4 && !busy && submit()}
         autoCapitalize="characters"
         placeholder="ABC123"
         maxLength={6}
       />
-      {error && <P style={{ color: colors.danger }}>{error}</P>}
+      {error && <Notice tone="error">{error}</Notice>}
       <Button title={t("joinBtn")} onPress={submit} loading={busy} disabled={code.length < 4} />
     </Screen>
   );

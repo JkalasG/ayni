@@ -35,7 +35,7 @@ function consultedSummary(consulted: unknown): string[] {
 export default function AiLog() {
   useScheme(); // re-render when the color mode changes
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [items, setItems] = useState<Entry[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -45,7 +45,7 @@ export default function AiLog() {
     }, [id])
   );
 
-  if (!items) return <Loading />;
+  if (!items) return <><Stack.Screen options={{ title: t("aiLog") }} /><Loading /></>;
   return (
     <Screen>
       <Stack.Screen options={{ title: t("aiLog") }} />
@@ -72,8 +72,8 @@ export default function AiLog() {
                   ))}
                 </View>
               )}
-              <P muted style={{ fontSize: 12 }}>
-                {new Date(e.createdAt).toLocaleString()}
+              <P muted style={{ fontSize: 13.5 }}>
+                {new Date(e.createdAt).toLocaleString(lang === "en" ? "en-US" : "es-BO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
               </P>
             </Card>
           </Pressable>
