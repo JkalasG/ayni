@@ -1,0 +1,12 @@
+# Use this ON TOP of docker-compose.yml when the server already has nginx/Apache on ports 80 and 443:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d --build
+#
+# The web container then listens only on 127.0.0.1:8081 (plain HTTP, not reachable from outside) and nginx forwards
+# your domain to it, see deploy/nginx-ayni.conf. HTTPS is nginx's (certbot), not Caddy's.
+services:
+  web:
+    ports: !override
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ./app/Caddyfile.proxy:/etc/caddy/Caddyfile:ro

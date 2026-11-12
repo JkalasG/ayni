@@ -57,6 +57,26 @@ Comprueba: `https://TU_DOMINIO/api/health` debe responder `{"ok":true,"mode":"li
 
 **No ejecutes `db:seed` dos veces** sobre la misma base si no quieres duplicar los datos demo.
 
+## 3b. Si el servidor ya tiene nginx o Apache en los puertos 80/443
+
+Comprueba con `ss -tlnp | grep -E ':80 |:443 '`. Si algo los usa, Caddy no puede tomarlos: levanta con el archivo adicional y deja que tu nginx haga de entrada.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec api npm run db:seed    # una vez
+```
+
+El contenedor `web` queda escuchando solo en `127.0.0.1:8081` (HTTP, inaccesible desde fuera). Después:
+
+```bash
+sudo cp deploy/nginx-ayni.conf /etc/nginx/sites-available/ayni      # revisa que server_name sea tu subdominio
+sudo ln -s /etc/nginx/sites-available/ayni /etc/nginx/sites-enabled/ayni
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d ayni.devsjec.com                            # emite el HTTPS y agrega la redireccion
+```
+
+Todo lo demás (PayPal, `.env`, copias) es igual. Con esta variante usa siempre los dos `-f` en cada comando de `docker compose` (`logs`, `restart`, `up --build`…), o expórtalo una vez: `export COMPOSE_FILE=docker-compose.yml:docker-compose.nginx.yml`.
+
 ## 4. Configurar PayPal (sandbox)
 
 En developer.paypal.com → tu app (reemplaza `TU_DOMINIO`):
