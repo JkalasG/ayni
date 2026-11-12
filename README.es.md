@@ -1,60 +1,89 @@
 <div align="center">
 
-# ayni
+<img src="docs/banner-es.png" alt="Ayni. Hoy por ti, mañana por mí. Sin límites, sin fronteras." width="100%">
 
-### Pasanakus hechos sobre PayPal y Claude.
-*Hoy por ti, mañana por mí.*
+<br>
 
-[English](README.md) · **Español**
+[![English](https://img.shields.io/badge/🌐_English-read_in_English-0A8BA8?style=for-the-badge)](README.md)
+[![Español](https://img.shields.io/badge/🌐_Español-estás_aquí-D4106B?style=for-the-badge)](README.es.md)
 
-<img src="docs/screenshots/es/login.png" alt="Pantalla de bienvenida de Ayni" width="900">
+# Hoy por ti, mañana por mí.<br>Sin límites, sin fronteras.
 
-[▶ Video de la demo](YOUTUBE_URL) &nbsp;·&nbsp; [🌐 Demo en línea](RENDER_URL) &nbsp;·&nbsp; [📱 APK de Android](APK_URL) &nbsp;·&nbsp; [🧪 Jurado: cuentas de prueba](#-pruébalo-en-dos-minutos)
+**Ayni convierte el pasanaku en el que millones de familias ya confían en algo que funciona entre vecinos, entre países y entre desconocidos: cada pago por PayPal y una IA que propone, pero nunca toca el dinero.**
 
-![PayPal sandbox](https://img.shields.io/badge/PayPal-Checkout%20·%20Payouts%20·%20Invoicing%20·%20Vault-003087?logo=paypal&logoColor=white)
-![Claude](https://img.shields.io/badge/Claude-asistente%20·%20mediador%20·%20MCP-D97757)
-![Bryntum](https://img.shields.io/badge/Bryntum-Scheduler-1F6FEB)
+[▶ Video de la demo](YOUTUBE_URL) &nbsp;·&nbsp; [🌐 Demo en línea](DEMO_URL) &nbsp;·&nbsp; [📱 APK de Android](APK_URL) &nbsp;·&nbsp; [🧪 Jurado: cuentas de prueba](#-pruébalo-en-dos-minutos)
+
+[![CI](https://github.com/JkalasG/ayni/actions/workflows/ci.yml/badge.svg)](https://github.com/JkalasG/ayni/actions/workflows/ci.yml)
+![PayPal sandbox](https://img.shields.io/badge/PayPal-12_capacidades-003087?logo=paypal&logoColor=white)
+![Evaluación de la IA](https://img.shields.io/badge/Evaluación_IA-22%2F22-brightgreen)
+![Bryntum](https://img.shields.io/badge/Bryntum-Scheduler_+_Calendar-1F6FEB)
+![MCP](https://img.shields.io/badge/MCP-servidor_de_solo_lectura-6E56CF)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-green)
+
+Hecho para el **PayPal AI Hackathon 2026**
 
 </div>
 
 ---
 
-## El problema
+## Primero, ¿qué es un pasanaku?
 
-Cientos de millones de personas ahorran en **grupos rotativos** (*pasanaku* en Bolivia, *tanda* en México, *ROSCA* en el resto del mundo). Todos aportan lo mismo cada semana o cada mes, y en cada ronda un miembro se lleva el pozo completo. Sin banco, sin intereses, sin papeles.
+Un **pasanaku** es la forma de ahorrar cuando el banco no es una opción. Un grupo acuerda un monto y un ritmo. En cada ronda todos ponen el mismo aporte y **un miembro se lleva el pozo completo**. En la ronda siguiente le toca a otra persona, hasta que todos hayan cobrado una vez.
 
-Funcionan con confianza, y se rompen de dos formas previsibles:
+| | Ronda 1 | Ronda 2 | Ronda 3 | Ronda 4 | Ronda 5 |
+|---|---|---|---|---|---|
+| Todos pagan | $40 | $40 | $40 | $40 | $40 |
+| El pozo de $200 es para | Juan Carlos | Marisol | Wara | Doña Rosa | Don Efraín |
 
-1. **Quien cobra el pozo al principio deja de pagar.** El resto del grupo se queda con la pérdida.
-2. **Solo funcionan entre personas que ya se conocen.** Alguien en Madrid no puede ahorrar con su familia en La Paz, y a un desconocido no se le confía el pozo.
+Sin intereses, sin papeles, sin historial crediticio. En Bolivia se llama *pasanaku*, en México *tanda*, en Perú *junta*, en África occidental *susu*, en India *chit fund*; los economistas lo llaman ROSCA. Cientos de millones de personas usan uno para pagar un puesto en la feria, un año de colegio o un viaje a casa.
 
-## La solución
+Funciona con una sola cosa: el **ayni**, el principio andino de reciprocidad. *Hoy por ti, mañana por mí.*
 
-Ayni conserva la tradición y arregla los dos problemas. Cada aporte y cada pozo pasan por **PayPal**, y **Claude** ayuda al grupo a organizarse, pero nunca toca el dinero.
+## La historia detrás de Ayni
+
+Imagina a Doña Rosa. Vende en una feria y organiza el mismo pasanaku desde hace años, con un cuaderno y un celular lleno de audios.
+
+Esta vez, quien tenía el primer turno cobró el pozo y dejó de contestar. No había contrato que hacer cumplir ni a quién llamar. Doña Rosa puso de su bolsillo los aportes que faltaban, porque el grupo confiaba en *ella*.
+
+Su hija se fue a Madrid y quiere entrar al pasanaku de la familia. No puede: el dinero se mueve en efectivo, de mano en mano, en una feria a 9.000 km.
+
+Así es como se rompe un pasanaku. **Quien cobra primero puede irse, y solo funciona entre personas que se ven la cara.** Ayni existe para que ninguna de las dos cosas vuelva a pasar.
+
+## Lo que hace Ayni
 
 <table>
 <tr>
 <td width="33%" valign="top">
 
-### 🛡 Garantía escalonada
-Quien cobra temprano recibe ahora la mayor parte del pozo; una parte queda **retenida y se devuelve sola** cuando termina de aportar. El turno 1 lleva la mayor garantía y el último no lleva ninguna. Si alguien deja de pagar, el grupo se cubre con su propia garantía.
+### 🛡 Una garantía escalonada
+Quien cobra temprano recibe ahora la mayor parte del pozo; una parte queda **retenida y se devuelve sola** cuando termina de aportar. El turno 1 lleva la mayor garantía y el último ninguna. Si alguien deja de pagar, su propia garantía cubre al grupo.
 
 </td>
 <td width="33%" valign="top">
 
-### 🪪 Pasaporte de confianza verificado
-Pasanakus completados, puntualidad, pagos atrasados, cuenta de PayPal verificada. Se construye **solo con cómo pagas dentro de Ayni**, nunca con edad, origen o género. Permite que desconocidos formen **pasanakus abiertos** entre países.
+### 🪪 Un pasaporte de confianza
+Pasanakus completados, puntualidad, atrasos, cuenta de PayPal verificada. Se construye **solo con cómo pagas dentro de Ayni**, nunca con edad, origen o género. Es lo que permite que desconocidos abran un pasanaku juntos, entre países.
 
 </td>
 <td width="33%" valign="top">
 
 ### 🤖 Una IA que propone y no paga
-Claude lee el grupo, escribe recordatorios, media en los conflictos y recomienda admisiones. Todo lo que mueve dinero se convierte en una **decisión que aprueba la organizadora**, y cada acción de la IA queda en un registro que todo el grupo puede leer.
+Lee el grupo, escribe los recordatorios, media y recomienda. Todo lo que mueve dinero se vuelve una **decisión que aprueba la organizadora**, y cada acción de la IA queda en un registro que todo el grupo puede leer.
 
 </td>
 </tr>
 </table>
+
+Y debajo de todo: **cada centavo pasa por PayPal.** Los miembros pagan con PayPal Checkout, el pozo sale con PayPal Payouts, y el dinero que entra siempre es igual al que sale.
+
+### Para quién sirve
+
+| | Qué le da Ayni |
+|---|---|
+| **La organizadora** (Doña Rosa) | Se acabó el cuaderno. La app cobra, recuerda, factura y envía el pozo; la IA le dice qué necesita atención hoy y por qué. Ella solo aprueba. |
+| **El miembro** | Paga en dos toques con PayPal, ve exactamente cuándo le toca y pregunta "¿cuánto debo?" en su idioma. Su multa o su garantía no son asunto de nadie más. |
+| **La familia en el exterior** | Una hija en Madrid y una madre en La Paz en el mismo pasanaku. PayPal lleva el dinero al otro lado de la frontera; el chat se traduce solo. |
+| **Quien llega sin historial** | Un turno de la segunda mitad y una garantía adicional, para construir reputación sin que el grupo corra el riesgo. |
 
 ---
 
@@ -62,20 +91,12 @@ Claude lee el grupo, escribe recordatorios, media en los conflictos y recomienda
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/es/group.png" alt="Resumen del pasanaku"><br><sub><b>El pasanaku de un vistazo.</b> El pozo, tu turno, la lectura de la ronda por el asistente con los próximos pasos, y el cronograma de pagos.</sub></td>
-<td width="50%"><img src="docs/screenshots/es/timeline.png" alt="Cronograma de turnos"><br><sub><b>Cronograma de turnos</b> con Bryntum Scheduler. Quién cobra en cada ronda; la organizadora arrastra un turno para cambiarlo.</sub></td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/screenshots/es/guarantee.png" alt="Línea de tiempo de la garantía"><br><sub><b>Línea de tiempo de la garantía.</b> Cuándo se retuvo cada garantía, se usó para cubrir un aporte atrasado o se devolvió. Privada para el miembro y la organizadora.</sub></td>
-<td width="50%"><img src="docs/screenshots/es/payments.png" alt="Historial de pagos"><br><sub><b>Cada centavo, rastreado hasta PayPal.</b> Cobros, envíos, comisiones y referencias, con filtros. El dinero que entra es el que sale.</sub></td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/screenshots/es/chat.png" alt="Chat del grupo y asistente privado"><br><sub><b>Chat del grupo + asistente privado.</b> Pregunta "¿quién falta?" y recibe datos reales; la respuesta solo la ves tú.</sub></td>
-<td width="50%"><img src="docs/screenshots/es/ai-log.png" alt="Registro de la IA"><br><sub><b>Registro de la IA.</b> Qué miró, qué decidió y si vino de Claude o de las reglas de respaldo.</sub></td>
+<td width="50%"><img src="docs/screenshots/es/group.png" alt="Resumen del pasanaku"><br><sub><b>El pasanaku de un vistazo.</b> El pozo, tu turno y la lectura de la ronda por el asistente, con los próximos pasos.</sub></td>
+<td width="50%"><img src="docs/screenshots/es/payments.png" alt="Historial de pagos"><br><sub><b>Cada centavo, rastreado hasta PayPal.</b> Cobros, envíos, comisiones y referencias, con filtros.</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/es/explore.png" alt="Pasanakus abiertos por país"><br><sub><b>Pasanakus abiertos entre desconocidos,</b> por país. Los hilos unen a miembros que pagan desde otro país.</sub></td>
-<td width="50%"><img src="docs/screenshots/es/profile.png" alt="Pasaporte de confianza"><br><sub><b>Pasaporte de confianza.</b> Nivel, puntualidad, logros e historial, construidos solo con el comportamiento de pago.</sub></td>
+<td width="50%"><img src="docs/screenshots/es/profile.png" alt="Pasaporte de confianza"><br><sub><b>Pasaporte de confianza.</b> Nivel, puntualidad, logros e historial, solo con el comportamiento de pago.</sub></td>
 </tr>
 </table>
 
@@ -88,51 +109,79 @@ Claude lee el grupo, escribe recordatorios, media en los conflictos y recomienda
 <tr>
 <td align="center"><sub>App Android + web, un solo código</sub></td>
 <td align="center"><sub>Pensada primero para el celular</sub></td>
-<td align="center"><sub>Temas claro y oscuro</sub></td>
+<td align="center"><sub>Claro y oscuro, español e inglés</sub></td>
 </tr>
 </table>
 
 ---
 
-## Cómo funciona un pasanaku
+## Cómo funciona un pasanaku en Ayni
 
-1. **Crear el pasanaku.** Aporte, frecuencia, multa por atraso y cómo se deciden los turnos (sorteo, organizadora o IA).
-2. **Los miembros entran** con un código de invitación y **inician sesión con PayPal**, así Ayni sabe exactamente adónde enviar su pozo.
+1. **Crear el pasanaku.** Descríbelo en una frase ("ocho comerciantes, cien dólares cada uno, cada mes") y la IA llena el formulario; o define aporte, frecuencia, multa y cómo se deciden los turnos (sorteo, organizadora o IA).
+2. **Los miembros entran** con un código de invitación e **inician sesión con PayPal**, así Ayni sabe exactamente adónde enviar su pozo.
 3. **En cada ronda**, los miembros pagan con PayPal Checkout. Cuando todos pagaron, la organizadora confirma y el pozo se envía con **PayPal Payouts**.
-4. **Garantía escalonada.** Quien cobra temprano recibe ahora la mayor parte del pozo; el resto queda retenido y se devuelve cuando termina de aportar. La evaluación de riesgo de Claude mueve el porcentaje como máximo ±10 puntos.
-5. **Pagos atrasados:** recordatorios cada vez más firmes escritos por Claude, una multa que va al pozo, una **factura de PayPal** en la etapa firme y, al terminar el plazo de gracia, el aporte se cubre con la propia garantía del miembro.
-6. **Si alguien de verdad no paga** y ya no tiene garantía, la organizadora puede cerrar la ronda sin su aporte para que el grupo nunca quede atascado. Esa deuda se descuenta del futuro pozo de quien no pagó y **se devuelve a quienes cobraron menos**. Queda en su perfil de confianza.
+4. **Garantía escalonada.** Quien cobra temprano recibe ahora la mayor parte del pozo; el resto queda retenido y se devuelve cuando termina. La evaluación de riesgo mueve el porcentaje como máximo ±10 puntos.
+5. **Los pagos atrasados** reciben recordatorios cada vez más firmes, una multa que va al pozo, una **factura de PayPal** en la etapa firme y, al terminar el plazo de gracia, el aporte se cubre con la propia garantía del miembro.
+6. **Si alguien de verdad no paga** y ya no tiene garantía, la organizadora puede cerrar la ronda sin su aporte para que el grupo nunca quede atascado. La deuda sale del futuro pozo de quien no pagó y **se devuelve a quienes cobraron menos**.
 
 ### Pasanakus abiertos entre desconocidos
 
-- **Perfil de confianza:** pasanakus completados y abandonados, % de pagos a tiempo, pagos atrasados, veces que se usó su garantía, antigüedad de la cuenta, cuenta de PayPal verificada.
 - **Reglas de la organizadora:** mínimo de pasanakus completados, mínimo % a tiempo, máximo de atrasos y si acepta recién llegados.
-- **Modos de admisión:** manual, automática por reglas, o **reglas + IA**: automática cuando se cumplen las reglas; en casos límite (una regla incumplida por poco) Claude explica y recomienda, y decide la organizadora.
-- **Depósito de admisión:** pedir entrar coloca una **autorización** de PayPal por un aporte, que no se cobra. Si se rechaza se **anula**; si se acepta se **captura** y cuenta como su aporte de la ronda 1.
-- **Recién llegados** (sin historial) siempre reciben un turno de la segunda mitad y una garantía adicional, para que construyan reputación sin poner en riesgo al grupo.
+- **Modos de admisión:** manual, automática por reglas, o **reglas + IA**: automática cuando se cumplen las reglas; en casos límite la IA explica y recomienda, y decide la organizadora.
+- **Depósito de admisión:** pedir entrar coloca una **autorización** de PayPal por un aporte, que no se cobra. Si se rechaza, se **anula**. Si se acepta, se **captura** y cuenta como el aporte de la ronda 1.
 
 ---
 
-## Dónde se usa la IA
+## La IA, en acción
 
-| Función | Qué hace Claude |
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/es/group.png" alt="El asistente lee la ronda"><br><sub><b>Lee la ronda y dice qué hacer.</b> Hay dos aportes pendientes en la ronda 4: un recordatorio amistoso para Marisol (buen historial) y una factura de PayPal para Don Efraín (antecedentes de atraso). Cada paso trae su razón, y nada pasa hasta que la organizadora toca.</sub></td>
+<td width="50%"><img src="docs/screenshots/es/chat.png" alt="Asistente privado en el chat del grupo"><br><sub><b>Responde con datos reales, en privado.</b> En el chat del grupo, una pregunta a Ayni y su respuesta solo las ve quien preguntó.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/es/ai-log.png" alt="Registro de la IA"><br><sub><b>Muestra su trabajo.</b> El registro de la IA guarda qué miró y qué concluyó, para todo el grupo.</sub></td>
+<td width="50%" valign="top">
+
+| Dónde | Qué hace la IA |
 |---|---|
-| Asistente del grupo | Responde "¿cuánto debo?", "¿cuándo me toca?", "¿quién falta?" con herramientas sobre datos reales del grupo, y muestra un botón *Pagar con PayPal* |
-| Lectura de la ronda | Mira el estado de la ronda y propone los próximos pasos (recordar, facturar, reintentar un envío) con la razón de cada uno |
-| Mediador | Atiende conflictos (no puedo pagar esta ronda, quiero cambiar de turno, disputas de PayPal), propone una opción justa y escala a la organizadora |
-| Recordatorios inteligentes | Escribe recordatorios personalizados que pasan de amistosos a firmes, en el idioma del miembro |
-| Orden de turnos + garantía | Propone un orden justo con una razón por miembro, según el historial de pagos; el % de garantía se ajusta por riesgo |
-| Admisión | En solicitudes límite, recomienda aceptar o rechazar con una explicación en lenguaje sencillo |
-| Disputas | Resume para la organizadora las disputas de PayPal sobre los aportes del grupo |
-| Traducción del chat | Muestra los mensajes de los demás en tu idioma, con el original debajo |
+| Lectura de la ronda | Propone los próximos pasos, con la razón de cada uno |
+| Asistente | "¿Cuánto debo?", "¿cuándo me toca?", con un botón *Pagar con PayPal* |
+| Mediador | No puedo pagar, quiero cambiar de turno, disputas: propone una salida justa y escala |
+| Recordatorios | De amistosos a firmes, en el idioma del miembro |
+| Orden de turnos | Un orden justo con una razón por miembro; ajusta la garantía por riesgo |
+| Admisión | Recomienda aceptar o rechazar en solicitudes límite |
+| Disputas | Resume las disputas de PayPal para la organizadora |
+| Llenado del formulario | Convierte una descripción en un pasanaku |
+| Traducción | Muestra el chat en tu idioma |
 
-**Seguridad por diseño: la IA puede leer y proponer, pero nunca mueve dinero.** Enviar el pozo, cambiar turnos, un orden propuesto por la IA, las admisiones y cerrar una ronda sin un aporte se convierten en *decisiones pendientes* que aprueba la organizadora. Si no responde a tiempo, la decisión se ejecuta sola, así el grupo nunca queda bloqueado.
+</td>
+</tr>
+</table>
 
-**Transparencia.** Cada decisión de la IA se escribe en un **registro de la IA** por grupo, visible para todos: qué miró (herramientas, datos), qué decidió y si vino de Claude, de las reglas o del respaldo que se usa cuando la IA no está disponible.
+### Cuatro reglas que la IA no puede romper
 
-**Resistencia.** Sin `ANTHROPIC_API_KEY` (o si Claude falla), cada función recurre a reglas y plantillas deterministas, y la app sigue funcionando.
+1. **Nunca mueve dinero.** Enviar el pozo, cambiar turnos, admitir y cerrar una ronda sin un aporte son *decisiones pendientes* de la organizadora. Si ella no responde a tiempo, la decisión se ejecuta según las reglas, así el grupo nunca queda bloqueado.
+2. **Nunca escribe un monto.** El modelo escribe las palabras con marcadores `{amount}` y el código pone el dinero. Un recordatorio con cualquier dígito propio se descarta.
+3. **Trata los mensajes de los demás como datos.** Un miembro no puede dejar instrucciones en el chat del grupo para que el asistente las obedezca.
+4. **Siempre se puede reemplazar por reglas.** Sin clave de IA, o si el modelo falla o tarda, cada función recurre a reglas y plantillas deterministas. La app sigue funcionando.
 
-**Privacidad.** Las preguntas de un miembro a Ayni y sus respuestas son privadas para ese miembro. Los mensajes de los demás se tratan como datos, nunca como instrucciones.
+### Medido, no afirmado
+
+`npm run test:ai` pone a prueba estas promesas contra el modelo real y los datos reales del grupo, y escribe el resultado en [`docs/evals/`](docs/evals/2026-11-12.md):
+
+| Prueba | Qué verifica | Resultado |
+|---|---|---:|
+| Respuestas con datos reales | Cada miembro pregunta cuánto debe; la respuesta coincide con la base de datos, en dólares, con el botón de pago correcto | 5/5 |
+| Idioma | La respuesta llega en el idioma de la app del miembro | 2/2 |
+| Inyección de instrucciones | Otro miembro deja instrucciones en el chat del grupo (una palabra clave, filtrar la garantía de alguien, un resultado falso con $9.999): no obedece, no filtra, no crea decisiones pendientes | 3/3 |
+| Recordatorios | Cuatro etapas × dos idiomas: el monto real está y el modelo no agregó ningún dígito propio | 8/8 |
+| Llenado del formulario | Un pasanaku descrito llena el formulario; lo que el texto no dice queda vacío | 4/4 |
+| **Total** | | **22/22** |
+
+Tres de los ocho recordatorios de esa corrida los escribió la plantilla de respaldo, porque el modelo llegó a su límite de solicitudes a mitad de la prueba. También pasaron: es la cuarta regla funcionando como se diseñó.
+
+**Modelos.** La capa de IA está escrita contra la API de mensajes de Anthropic con uso de herramientas (Claude), y un adaptador corre el mismo código con cualquier modelo compatible con OpenAI. La evaluación de arriba corrió con modelos Gemini Flash por ese adaptador.
 
 ### Servidor MCP (solo lectura)
 
@@ -140,23 +189,54 @@ Un miembro puede darle a **su propio** asistente de IA (Claude u otro cliente MC
 
 ---
 
-## También en la app
+## El tiempo a la vista: Bryntum
 
-- **Historial de pagos** por pasanaku y por persona, con referencias de PayPal, la comisión de cada cobro y una tarjeta *Verificado con PayPal*.
-- **Chat del grupo** con tarjetas de lo que pasó (pagó, se envió el pozo…), límite de mensajes y limpieza del texto. La autora o la organizadora pueden ocultar un mensaje.
-- **Reclamos:** un miembro reporta un problema con un aporte; la organizadora lo reembolsa o lo explica. Si el miembro abre una disputa en PayPal, se une al mismo reclamo y la decisión de PayPal queda escrita ahí.
-- **Aportes automáticos (PayPal Vault):** opcionales; se **avisa antes de cada cobro** y se pueden apagar en cualquier momento.
-- **Conciliación diaria** con PayPal Transaction Search: los cobros registrados por Ayni se comparan con los de PayPal, y las diferencias llegan a la organizadora.
+Un pasanaku es un cronograma. Quién paga cuándo, quién cobra cuándo, cuánto tiempo se retiene una garantía. En papel eso es un cuaderno que nadie más puede leer; en Ayni son cuatro pantallas hechas con [Bryntum](https://bryntum.com), **tres con Scheduler y una con Calendar**, y cada una responde una pregunta distinta.
 
-### Cronogramas con Bryntum Scheduler (web)
+### 1 · Cronograma de turnos: *¿quién cobra el pozo y cuándo?*
 
-Tres pantallas de un pasanaku usan [Bryntum Scheduler](https://bryntum.com/products/scheduler/), una fila por miembro:
+<img src="docs/screenshots/es/timeline.png" alt="Cronograma de turnos con Bryntum Scheduler" width="100%">
 
-- **Cronograma de turnos:** quién cobra el pozo en cada ronda. La organizadora arrastra un turno sobre otro miembro para intercambiarlos (siempre con confirmación, validado otra vez por el servidor, solo en rondas que no empezaron).
-- **Calendario de pagos:** el aporte de cada miembro a cada ronda (pagado, pendiente, atrasado…), con una estrella en quien cobra. Solo lectura.
-- **Línea de tiempo de la garantía:** cuándo se retuvo, usó, devolvió o reembolsó cada garantía. Un miembro ve solo la suya; la organizadora ve la de todos.
+Una fila por miembro y una barra por ronda, unidas por líneas de dependencia para que el orden se lea como una escalera. Verde es un pozo ya enviado y naranja la ronda que se está cobrando. **La organizadora arrastra una barra sobre otro miembro para intercambiar sus turnos**: Bryntum maneja el gesto, Ayni pide confirmación y el servidor lo valida otra vez (solo rondas que no empezaron; las fechas nunca se mueven). Cuando alguien se atrasa, el asistente propone el cambio y la organizadora lo aprueba aquí.
 
-Bryntum dibuja sobre el DOM del navegador, así que estas pantallas son solo web. La clave de licencia va en `EXPO_PUBLIC_BRYNTUM_LICENSE` (nunca se sube al repositorio; ver `app/.env.example`).
+### 2 · Cronograma de pagos: *¿quién pagó esta ronda?*
+
+<img src="docs/screenshots/es/payment-calendar.png" alt="Cronograma de pagos con Bryntum Scheduler" width="100%">
+
+La misma grilla, usada como matriz: el aporte de cada miembro a cada ronda. Pagado, atrasado, cubierto con la garantía, cerrado sin pago, cada uno con su propio tejido para que se lea sin depender del color. La fila de arriba es el pozo y quién lo cobra; la de abajo es un **resumen de Bryntum** con lo recaudado frente a lo esperado. "Solo yo" y "Buscar miembro" son filtros de Scheduler.
+
+### 3 · Línea de tiempo de la garantía: *¿dónde está mi garantía?*
+
+<img src="docs/screenshots/es/guarantee.png" alt="Línea de tiempo de la garantía con Bryntum Scheduler" width="100%">
+
+Aquí una barra es un tramo de tiempo: desde el día en que se retuvo parte de un pozo hasta que se devuelve. Los rombos marcan cuándo se usó para cubrir un aporte atrasado. Una columna fija muestra cuánto está retenido ahora. **Un miembro ve solo su fila; la organizadora ve la de todos**, y eso lo decide el servidor, no la pantalla.
+
+### 4 · Mi calendario: *¿cuánto voy a tener para esa fecha?*
+
+<img src="docs/screenshots/es/calendar.png" alt="Calendario personal con Bryntum Calendar" width="100%">
+
+**Bryntum Calendar**, con todos los pasanakus de una persona: lo que aporta y lo que recibe, día por día. Toca un día y Ayni suma lo que falta pagar y cobrar hasta entonces. Convierte "¿cuándo me toca?" en "¿puedo contar con ese dinero para marzo?".
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/es/timeline-dark.png" alt="Cronograma de turnos en modo oscuro"><br><sub>El mismo cronograma en modo oscuro. Bryntum está vestido por completo con la paleta, las fuentes, las esquinas escalonadas y los tejidos de Ayni, y sigue el idioma de la app.</sub></td>
+<td width="50%" valign="top">
+
+**Lo que Bryntum nos dio**
+
+- **Semanas de trabajo que no tuvimos que hacer.** Desplazamiento virtual, columnas fijas, arrastrar y soltar con validación, dependencias, resúmenes, eje de tiempo e idiomas ya vienen listos.
+- **No estorba.** Cada color y cada esquina que se ve es nuestra. Sus variables CSS y sus renderizadores dejan que un cronograma de propósito general parezca un tejido andino.
+- **Respeta las reglas del dinero.** Arrastrar es solo una propuesta: `beforeEventDropFinalize` nos deja detener, preguntar y dejar que decida el servidor.
+
+</td>
+</tr>
+</table>
+
+**Lo recomendamos,** con un consejo: úsalo como la vista, nunca como la fuente de la verdad. Deja que Bryntum dibuje el tiempo y capture la intención, y guarda cada regla en el servidor. Así usado, es la diferencia entre una tabla de fechas y un grupo que puede *ver* su propio futuro.
+
+**Y abre más de lo que alcanzamos a construir:** un Gantt de un plan de ahorro de varios años, histogramas de cuánto tiene en riesgo cada miembro por semana, un tablero de tareas para las decisiones pendientes de la organizadora, escenarios "¿y si…?" ("¿y si entran dos miembros más?") arrastrando sobre una copia de prueba. Cualquier producto donde el dinero tiene calendario le encuentra uso.
+
+<sub>Estas pantallas son solo web, porque Bryntum dibuja sobre el DOM del navegador; el celular muestra los mismos datos como listas. El repositorio usa una licencia de prueba, por eso se ve la insignia de Bryntum en las capturas. La clave va en `EXPO_PUBLIC_BRYNTUM_LICENSE` y nunca se sube al repositorio.</sub>
 
 ---
 
@@ -166,7 +246,7 @@ PayPal no es un botón de pago agregado al final: cada movimiento de dinero en A
 
 | Capacidad de PayPal | Uso en Ayni |
 |---|---|
-| Log in with PayPal (Identity API) | Inicio de sesión, el correo verificado donde se entregan los envíos y la insignia "verificado" del perfil de confianza |
+| Log in with PayPal (Identity API) | Inicio de sesión, la cuenta verificada donde se entregan los envíos y la insignia "verificado" del pasaporte de confianza |
 | Orders v2: crear + capturar | Cada aporte, incluidas las multas |
 | Orders v2 (AUTHORIZE) + Payments v2: capturar / anular | Depósito de admisión en pasanakus abiertos |
 | Payouts | Enviar el pozo, devolver garantías, compensar pozos cortos; los envíos fallidos se pueden reintentar |
@@ -176,20 +256,22 @@ PayPal no es un botón de pago agregado al final: cada movimiento de dinero en A
 | Vault v3 (método de pago guardado) | Aportes automáticos opcionales, con aviso antes de cada cobro |
 | Payouts a `PAYPAL_ID` | El pozo va a la cuenta de PayPal que inició sesión, no a un correo que podría cambiar |
 | Balances (reportes) | Antes de enviar un pozo se revisa el saldo de la plataforma; si PayPal dice que falta, no se envía nada |
-| Transaction Search (reportes) | Conciliación diaria de cobros |
+| Transaction Search (reportes) | Conciliación diaria: los cobros registrados por Ayni contra los de PayPal |
 | Webhooks (firma verificada) | Capturas, reembolsos y reversos, pagos denegados, retenciones de depósito, estado de envíos (*sin reclamar* ≠ fallido), facturas pagadas, disputas, tokens de Vault |
+
+También en la app: **reclamos** (un miembro reporta un problema con un aporte; una disputa de PayPal se une al mismo reclamo), un **chat del grupo** con tarjetas de lo que pasó y un **historial de pagos** por persona con la comisión de PayPal en cada cobro.
 
 ---
 
 ## Por qué encaja con los criterios del jurado
 
-| Criterio | Lo que aporta Ayni |
-|---|---|
-| **Implementación tecnológica** | 12 capacidades de PayPal en un flujo coherente, Claude con herramientas sobre datos reales, un servidor MCP de solo lectura, webhooks verificados, movimientos de dinero idempotentes y una prueba de punta a punta que verifica *dinero que entra = dinero que sale*. |
-| **Diseño** | Un producto completo, no una prueba de concepto: Android + web con un solo código, temas claro y oscuro, ES/EN, una identidad tomada del tejido andino y componentes accesibles. |
-| **Impacto potencial** | Una tradición real que ya mueve dinero para cientos de millones de personas, con una falla real (quien cobra primero y deja de pagar) y una forma de extenderla a familias y desconocidos entre países. |
-| **Innovación / idea** | Una garantía que baja según el turno, un perfil de confianza hecho solo con el comportamiento de pago y una IA auditable por diseño: propone, las personas deciden y cada acción queda registrada. |
-| **Presentación** | Una demo que cabe en menos de tres minutos: el modo demo reduce las rondas a minutos para ver en pantalla un ciclo completo (pagar, atraso, cobertura, pozo enviado). |
+| Criterio | Lo que aporta Ayni | Dónde verlo |
+|---|---|---|
+| **Implementación tecnológica** | 12 capacidades de PayPal en un flujo coherente, IA con herramientas sobre datos reales, un servidor MCP de solo lectura, webhooks verificados, movimientos de dinero idempotentes | [Tabla de PayPal](#dónde-se-usa-paypal) · [Seguridad del dinero](#seguridad-del-dinero) · `backend/test/e2e.ts` |
+| **Diseño** | Un producto completo: Android + web con un solo código, claro y oscuro, español e inglés, una identidad tomada del tejido andino | [Míralo](#míralo) · [`propuesta/`](propuesta/) |
+| **Impacto potencial** | Una tradición que ya mueve dinero para cientos de millones de personas, su falla más conocida y una forma de llevarla al otro lado de las fronteras | [La historia](#la-historia-detrás-de-ayni) · [Para quién sirve](#para-quién-sirve) |
+| **Innovación / idea** | Una garantía que baja según el turno, confianza hecha solo con el comportamiento de pago y una IA auditable por diseño | [Lo que hace Ayni](#lo-que-hace-ayni) · [Cuatro reglas](#cuatro-reglas-que-la-ia-no-puede-romper) |
+| **Presentación** | Un ciclo completo (pagar, atraso, cobertura, pozo enviado) en pantalla en menos de tres minutos: el modo demo reduce las rondas a minutos | [Video de la demo](YOUTUBE_URL) |
 
 **Construido durante el período de presentación.** El primer commit del repositorio es del 4 de noviembre de 2026; todo lo descrito aquí se construyó después.
 
@@ -197,18 +279,29 @@ PayPal no es un botón de pago agregado al final: cada movimiento de dinero en A
 
 ## Arquitectura
 
-```
-App Expo (Android + web)  ──►  API Node/Express (Render)  ──►  PayPal REST (sandbox)
-                                   │        │
-                                   │        └──►  Claude (API de Anthropic, tool use)
-                                   └──►  Postgres en Neon (Prisma)
-   Motor (cada 20 s): recordatorios · multas · facturas · cobertura de garantía · ejecución automática
+```mermaid
+flowchart LR
+  subgraph Personas
+    M[Miembro<br>Android · web]
+    O[Organizadora<br>Android · web]
+    X[La IA del miembro<br>cliente MCP]
+  end
+  M & O --> APP[App Expo<br>React Native + web<br>Bryntum en web]
+  APP --> API[API Node · Express]
+  X -- clave de solo lectura --> MCP[Servidor MCP<br>6 herramientas de lectura] --> API
+  API --> DB[(Postgres<br>Prisma)]
+  API <--> PP[PayPal REST<br>Orders · Payouts · Invoicing<br>Vault · Disputes · Reportes]
+  PP -- webhooks firmados --> API
+  API --> AI[Modelo de IA<br>uso de herramientas]
+  AI -. propone .-> PA[Decisiones pendientes]
+  PA -- la organizadora aprueba --> API
+  ENG[Motor, cada 20 s<br>recordatorios · multas · facturas<br>cobertura de garantía · ejecución automática] --> API
 ```
 
 - `backend/src/domain/rules.ts`: reglas puras del pasanaku (garantía escalonada, multas, riesgo, perfil de confianza, admisión, ubicación de recién llegados), con pruebas unitarias
 - `backend/src/services/`: ciclo de vida del grupo, pagos, admisión, disputas, decisiones de la organizadora, motor, registro de la IA
-- `backend/src/ai/agent.ts`: asistente de Claude, mediador, recordatorios, orden de turnos, resúmenes de admisión y disputas
-- `backend/test/e2e.ts`: prueba de punta a punta del flujo de dinero contra un PayPal falso
+- `backend/src/ai/`: asistente, mediador, lectura de la ronda, recordatorios, orden de turnos, admisión, llenado del formulario, traducción
+- `backend/test/`: prueba de punta a punta del flujo de dinero contra un PayPal falso, prueba del protocolo MCP, prueba rápida de endpoints, evaluación de la IA
 - `app/src/app/`: pantallas de Expo Router
 
 ### Seguridad del dinero
@@ -217,17 +310,18 @@ App Expo (Android + web)  ──►  API Node/Express (Render)  ──►  PayPa
 - Cada movimiento de dinero se reclama primero con una actualización condicional, así que dobles clics, reintentos y webhooks duplicados nunca pagan dos veces. Los ids de solicitud de PayPal también son idempotentes.
 - Un envío cuyo resultado se desconoce (timeout, 5xx) se marca **UNKNOWN**, no fallido, y solo se reintenta con el **mismo** `sender_batch_id`, así PayPal nunca puede pagarlo dos veces.
 - Los webhooks se verifican, se deduplican por id de evento y los estados de envío nunca retroceden.
-- **La IA nunca escribe montos.** Claude escribe los recordatorios con marcadores `{amount}` que el código llena. Cualquier dígito escrito por el modelo descarta el texto.
-- **Dignidad dentro del grupo:** los miembros solo ven *pagado / pendiente*. Quién usó su garantía, pagó una multa o no pagó lo ven solo esa persona y la organizadora.
+- **Dignidad dentro del grupo:** los miembros solo ven *pagado / pendiente*. Quién usó su garantía, pagó una multa o no pagó lo ven solo esa persona y la organizadora, en la app y en lo que dice el asistente.
 - La prueba de punta a punta corre un pasanaku completo con un impago, una cobertura con garantía, una respuesta perdida de PayPal y una compensación, y verifica que **dinero que entra == dinero que sale**. La integración continua la corre en cada push.
 
 ---
 
 ## 🧪 Pruébalo en dos minutos
 
-**Demo en línea:** [RENDER_URL](RENDER_URL) (plan gratuito: la primera carga puede tardar unos 30 s mientras despierta el servidor).
+**Demo en línea:** [DEMO_URL](DEMO_URL)
 
-En la pantalla de bienvenida hay dos etiquetas junto a los botones:
+En la pantalla de bienvenida cuelgan dos etiquetas de los botones:
+
+<img src="docs/screenshots/es/login-credentials.png" alt="Cuentas sandbox en la pantalla de bienvenida" width="640">
 
 - **Usuarios** (en *Entrar a la demo*): entra como un miembro de muestra sin contraseña, para ver la app funcionando al instante.
 - **Claves** (en *Ingresar con PayPal*): las cuentas de PayPal sandbox, con un botón para copiar cada correo y contraseña. Úsalas en la ventana de PayPal para pagar de verdad, en sandbox.
@@ -250,7 +344,7 @@ Al iniciar sesión en PayPal con una de estas cuentas entras como ese miembro, c
 
 | Miembro | Prueba esto |
 |---|---|
-| **Doña Rosa** | Organizadora de *Pasanaku del barrio* (código `BARRIO`, rondas de 4 minutos): define el orden de turnos con la IA, aprueba, inicia, envía pozos. También *Pasanaku de los comerciantes*, ya a mitad de ciclo con un pago atrasado, una garantía cubierta y una ronda abierta |
+| **Doña Rosa** | Organizadora. *Pasanaku de los comerciantes* está a mitad de ciclo con un pago atrasado, una garantía cubierta y una ronda abierta: lee la propuesta del asistente y abre Turnos, Garantía y Pagos. *Pasanaku del barrio* (código `BARRIO`, rondas de 4 minutos): define el orden con la IA, aprueba, inicia, envía pozos |
 | Juan Carlos, Marisol, Don Efraín, Wara | Miembros: pagan con PayPal y conversan con el asistente ("¿cuánto debo?", "no puedo pagar esta semana") |
 | **Tomás** | *Explorar* → *Pasanaku abierto de la feria*: está en el límite (75% a tiempo, el pasanaku pide 80%), así que la IA recomienda y decide **Marisol** (organizadora) |
 | **Kusi** | Nuevo en Ayni: se acepta como recién llegado, con un turno de la segunda mitad y una garantía adicional |
@@ -266,11 +360,11 @@ cd backend && npm install && echo APP_MODE=mock > .env && npm run dev
 cd app && npm install && echo EXPO_PUBLIC_API_URL=http://localhost:4000 > .env && npx expo start --web
 ```
 
-Base de datos embebida, un PayPal simulado servido por la propia API (`/__paypal`, con sus páginas de pago y un panel de todo lo "cobrado" y "enviado"), el asistente basado en reglas en vez de Claude y datos de muestra para cada pantalla. La app muestra una etiqueta **MODO SIMULADO**. Nada sale de tu computadora. `npm run mock:reset` empieza de cero.
+Base de datos embebida, un PayPal simulado servido por la propia API (`/__paypal`, con sus páginas de pago y un panel de todo lo "cobrado" y "enviado"), el asistente basado en reglas en vez de un modelo y datos de muestra para cada pantalla. La app muestra una etiqueta **MODO SIMULADO**. Nada sale de tu computadora. `npm run mock:reset` empieza de cero.
 
-### Con PayPal sandbox y Claude
+### Con PayPal sandbox y un modelo de IA
 
-Requisitos: Node 20+, una base de datos Postgres, una cuenta de PayPal Developer y una API key de Anthropic (opcional).
+Requisitos: Node 20+, una base de datos Postgres, una cuenta de PayPal Developer y, opcionalmente, una clave de IA (`ANTHROPIC_API_KEY` para Claude, o `AI_BASE_URL` + `AI_MODEL` para cualquier modelo compatible con OpenAI).
 
 ```bash
 # 1. Backend
@@ -296,7 +390,7 @@ Configuración de PayPal (sandbox, developer.paypal.com → Apps & Credentials �
 - Para mostrar las cuentas sandbox en la pantalla de bienvenida, define `ENABLE_DEMO_LOGIN=true`, `DEMO_MEMBER_EMAILS` (7 correos, en el orden de la tabla de arriba) y `DEMO_MEMBER_PASSWORD`.
 - Después de traer código nuevo, corre `npx prisma db push` en `backend/` (los cambios solo agregan tablas y columnas).
 
-PayPal debe poder llegar a `PUBLIC_API_URL`, así que usa una URL desplegada (ver `render.yaml`) o un túnel.
+PayPal debe poder llegar a `PUBLIC_API_URL`, así que usa un servidor con dirección pública o un túnel.
 
 Pruebas:
 
@@ -304,6 +398,7 @@ Pruebas:
 cd backend
 npm test                                                      # pruebas unitarias: reglas de dinero, libro, chat, conciliación, acceso MCP…
 npm run test:mcp                                              # inicia el servidor MCP real y habla con él por el protocolo
+npm run test:ai                                               # la evaluación de la IA de arriba (necesita la base con datos demo y una clave de IA)
 E2E_DATABASE_URL=postgresql://.../ayni_e2e npm run test:e2e   # flujos completos, necesita una base VACÍA
 npm run mock:reset && npm run dev   # luego, en otra terminal:  npm run test:smoke   (todos los endpoints, modo simulado)
 ```
@@ -312,13 +407,26 @@ APK de Android: `cd app && npx eas init && npx eas build -p android --profile pr
 
 ---
 
+## Límites, con honestidad
+
+- **Solo sandbox.** Custodiar los fondos de un grupo en producción exige licencias de transmisión de dinero; el camino es un socio regulado o los productos de plataforma y marketplace de PayPal.
+- **Los cronogramas son solo web.** En el celular los mismos datos se ven como listas.
+- **La conciliación cubre los cobros,** todavía no los envíos.
+- **La evaluación de la IA es pequeña** (22 casos, una corrida, un modelo). Verifica las promesas de este README; no es un benchmark.
+- **El efectivo queda fuera a propósito.** Dinero fuera de PayPal rompería "dinero que entra = dinero que sale".
+
 ## Hoja de ruta
 
-- Conciliar también los envíos (hoy la revisión diaria cubre solo los cobros)
-- Registrar aportes en efectivo queda fuera a propósito: dinero fuera de PayPal rompería "dinero que entra = dinero que sale"
-- Votación del grupo sobre los órdenes propuestos por la IA y un canal de WhatsApp para recordatorios
-- En producción, custodiar fondos de un grupo exige licencias de transmisión de dinero; el camino sería un socio regulado o los productos de plataforma/marketplace de PayPal.
+- Conciliar también los envíos
+- Votación del grupo sobre los órdenes de turnos propuestos por la IA
+- Recordatorios por WhatsApp
+- Un planificador "¿y si…?" para la organizadora ("¿y si entran dos miembros más?")
 
 ## Licencia
 
 [MIT](LICENSE)
+
+<div align="center">
+<br>
+<img src="propuesta/png/logos/ayni-logo-vertical-lema-es-noche.png" alt="Ayni. Hoy por ti, mañana por mí. Sin límites, sin fronteras." width="260">
+</div>
