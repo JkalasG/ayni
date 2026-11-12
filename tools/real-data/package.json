@@ -1,0 +1,13 @@
+{
+  "name": "ayni-real-data",
+  "private": true,
+  "type": "module",
+  "description": "Fills a running Ayni with REAL PayPal sandbox activity: each member pays with their sandbox account and the pots are sent with Payouts.",
+  "scripts": {
+    "check": "node run.mjs --check",
+    "run": "node run.mjs"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}

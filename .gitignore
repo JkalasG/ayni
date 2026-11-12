@@ -15,3 +15,6 @@ INSTRUCCIONES_AYNI.md
 
 # local database of APP_MODE=mock
 backend/.mock-db/
+
+# screenshots left by tools/real-data when PayPal shows something unexpected
+tools/real-data/screenshots/

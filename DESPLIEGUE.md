@@ -92,6 +92,24 @@ En developer.paypal.com → tu app (reemplaza `TU_DOMINIO`):
 
 En `app/eas.json`, perfil `preview`, pon `EXPO_PUBLIC_API_URL` = `https://TU_DOMINIO/api` y construye con `npx eas build -p android --profile preview` (ver README).
 
+## 5b. Llenar PayPal con actividad real (opcional)
+
+El seed deja datos de muestra en Ayni, pero PayPal sandbox queda vacío. El script de `tools/real-data` lo llena de verdad: cada miembro paga con su cuenta sandbox en PayPal Checkout (Chrome lo maneja solo) y la organizadora envía los pozos con Payouts. Se ejecuta **desde tu PC**, contra tu servidor:
+
+```bash
+cd tools/real-data
+npm install
+node run.mjs --check                        # solo lee: comprueba servidor, cuentas y Chrome
+node run.mjs --only feria --rounds 1        # primera prueba: una ronda de un solo pasanaku
+node run.mjs                                # todo: 2 pasanakus, 8 rondas, unos 30 pagos reales
+node run.mjs --headful                      # muestra Chrome (si PayPal pide un captcha, lo resuelves tú)
+```
+
+- Se puede cortar y volver a correr: continúa donde quedó cada pasanaku.
+- Si PayPal cambia su pantalla o pide verificación, deja una captura en `tools/real-data/screenshots/` y avisa del paso donde se detuvo.
+- Los pasanakus que crea son `Pasanaku de la feria (PayPal real)` y `Ahorro del barrio (PayPal real)`; los montos y miembros se cambian al inicio de `run.mjs`.
+- Para enviar un pozo, la cuenta Business de tu app necesita saldo: sale de los propios pagos de la ronda, pero si falla con "saldo insuficiente", agrégale fondos en el panel sandbox (Accounts → tu cuenta Business → Fund).
+
 ## 6. Mantenimiento
 
 ```bash
