@@ -10,6 +10,7 @@ import { useI18n, type Key } from "@/lib/i18n";
 import { useScheme } from "@/lib/scheme";
 import { api, ApiError, money } from "@/lib/api";
 import { fonts } from "@/lib/theme";
+import { Empty } from "@/components/empty";
 import { Guide, TwoCol } from "@/components/guide";
 import { useLayout } from "@/lib/layout";
 
@@ -117,7 +118,15 @@ export default function Claims() {
       <TwoCol side={<Guide title={t("clGuide")} steps={[{ title: t("clG1"), body: t("clG1b") }, { title: t("clG2"), body: t("clG2b") }, { title: t("clG3"), body: t("clG3b") }, { title: t("clG4"), body: t("clG4b") }]} note={t("clNote")} />}>
       {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
       {form}
-      {data.claims.length === 0 && !newFor && <Notice>{data.isOrganizer ? t("clEmpty") : t("clEmptyMember")}</Notice>}
+      {data.claims.length === 0 && !newFor && (
+        <Empty
+          icon="aprobar"
+          tone="verde"
+          title={t("emClaims")}
+          body={data.isOrganizer ? t("emClaimsOrg") : t("clEmptyMember")}
+          action={data.isOrganizer ? undefined : { label: t("emGoPayments"), onPress: () => router.navigate(`/groups/${id}/payments` as any) }}
+        />
+      )}
       {data.claims.map((cl) => (
         <Card key={cl.id}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>

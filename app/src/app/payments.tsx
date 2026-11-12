@@ -8,6 +8,7 @@ import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
 import { api, money } from "@/lib/api";
 import { fonts, space } from "@/lib/theme";
+import { Empty } from "@/components/empty";
 
 type Mine = {
   entries: LedgerEntry[];
@@ -72,7 +73,7 @@ export default function MyPayments() {
         ]}
       />
       {data.entries.length === 0 ? (
-        <Notice>{t("lgEmptyMine")}</Notice>
+        <Empty icon="paypal" tone="amarillo" title={t("emPay")} body={t("lgEmptyMine")} />
       ) : (
         <>
           <View style={{ flexDirection: wide ? "row" : "column", gap: space(4), alignItems: wide ? "flex-end" : "stretch", flexWrap: "wrap" }}>
@@ -115,7 +116,7 @@ export default function MyPayments() {
               </Pressable>
             ) : null}
           </View>
-          {shown.length === 0 ? <Notice>{t("lgEmptyFilter")}</Notice> : <LedgerList entries={shown} locale={lang === "en" ? "en-US" : "es-BO"} personal />}
+          {shown.length === 0 ? <Empty icon="explorar" tone="naranja" title={t("emFilter")} body={t("emFilterBody")} action={{ label: t("mpClear"), onPress: () => (setKind("all"), setGroup("all"), setQ("")) }} /> : <LedgerList entries={shown} locale={lang === "en" ? "en-US" : "es-BO"} personal />}
         </>
       )}
     </Screen>

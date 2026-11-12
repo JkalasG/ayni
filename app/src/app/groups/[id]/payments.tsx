@@ -4,6 +4,7 @@ import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router
 import { Button, Card, Chips, Field, H2, Loading, Notice, P, Screen } from "@/components/ui";
 import { useScheme } from "@/lib/scheme";
 import { fonts, space } from "@/lib/theme";
+import { Empty } from "@/components/empty";
 import type { Key } from "@/lib/i18n";
 import { LedgerList, LedgerSummary, type LedgerEntry } from "@/components/ledger";
 import { useI18n } from "@/lib/i18n";
@@ -176,7 +177,13 @@ export default function GroupPayments() {
           </Pressable>
         ) : null}
       </View>
-      {shown.length === 0 ? <Notice>{data.entries.length === 0 ? t("lgEmpty") : t("lgEmptyFilter")}</Notice> : <LedgerList entries={shown} locale={lang === "en" ? "en-US" : "es-BO"} onReport={(contributionId) => router.push(`/groups/${id}/claims?new=${contributionId}` as any)} />}
+      {shown.length === 0 ? (
+        data.entries.length === 0 ? (
+          <Empty icon="paypal" tone="amarillo" title={t("emPay")} body={t("lgEmpty")} />
+        ) : (
+          <Empty icon="explorar" tone="naranja" title={t("emFilter")} body={t("emFilterBody")} action={{ label: t("mpClear"), onPress: () => (setFilter("all"), setState("all"), setRound("all"), setQ("")) }} />
+        )
+      ) : <LedgerList entries={shown} locale={lang === "en" ? "en-US" : "es-BO"} onReport={(contributionId) => router.push(`/groups/${id}/claims?new=${contributionId}` as any)} />}
       <P muted style={{ fontSize: 14, lineHeight: 20 }}>
         {data.isOrganizer ? t("lgPrivacyOrganizer") : t("lgPrivacy")}
       </P>

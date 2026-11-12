@@ -8,6 +8,7 @@ import { useLayout } from "@/lib/layout";
 import { useI18n, type Key } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { colors } from "@/lib/theme";
+import { Empty } from "@/components/empty";
 
 type Entry = { id: string; kind: string; source: string; subject: string; consulted: unknown; output: string; createdAt: string };
 
@@ -69,7 +70,7 @@ export default function AiLog() {
         }
       >
       {items.length === 0 ? (
-        <Notice>{t("noAiLog")}</Notice>
+        <Empty icon="rayo" title={t("emAi")} body={t("emAiBody")} />
       ) : (
         <Chips value={kind} onChange={setKind} options={[{ value: "all", label: `${t("lgAll")} (${items.length})` }, ...[...new Set(items.map((e) => e.kind))].map((k) => ({ value: k, label: t(`kind_${k}` as Key) }))]} />
       )}

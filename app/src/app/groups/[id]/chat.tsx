@@ -21,6 +21,7 @@ import { PayPalWordmark } from "@/components/paypal";
 import { colors, radius, fonts, space } from "@/lib/theme";
 import { Guide } from "@/components/guide";
 import { useLayout } from "@/lib/layout";
+import { Empty } from "@/components/empty";
 
 type ChatEvent =
   | { type: "paid"; name: string; round: number }
@@ -147,7 +148,7 @@ export default function Chat() {
           keyExtractor={(m) => m.id}
           contentContainerStyle={{ padding: wide ? 20 : 16, gap: 10, maxWidth: wide ? undefined : 560, width: "100%", alignSelf: "center" }}
           onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
-          ListEmptyComponent={msgs ? <P muted>{t("chEmpty")}</P> : undefined}
+          ListEmptyComponent={msgs ? <Empty icon="chat" tone="fucsia" title={t("emChat")} body={t("chEmpty")} /> : undefined}
           renderItem={({ item }) => (
             <Bubble m={item} translation={translate ? translated[`${item.id}:${lang}`] : undefined} showOriginal={!!original[item.id]} onFlip={() => setOriginal((o) => ({ ...o, [item.id]: !o[item.id] }))} mine={item.userId === me?.id} selected={selected === item.id} onSelect={() => setSelected(selected === item.id ? null : item.id)} onHide={() => hide(item.id)} />
           )}

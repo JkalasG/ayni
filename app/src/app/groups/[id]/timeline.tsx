@@ -11,6 +11,7 @@ import { Legend } from "@/components/legend";
 import { ROUND_HUE } from "@/lib/sched-colors";
 import type { TimelineMember, TimelineRound } from "@/components/turn-timeline-types";
 import { useI18n, type Key } from "@/lib/i18n";
+import { Empty } from "@/components/empty";
 import { useScheme } from "@/lib/scheme";
 import { api, ApiError } from "@/lib/api";
 
@@ -136,7 +137,7 @@ export default function Timeline() {
           onSwap={swap}
         />
       ) : (
-        <Notice>{t("tlNotStarted")}</Notice>
+        <Empty icon="turno" tone="amarillo" title={t("emTurns")} body={t("emTurnsBody")} />
       )}
       {running && (
         <Legend

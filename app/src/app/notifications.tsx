@@ -10,6 +10,7 @@ import { useI18n, type Key } from "@/lib/i18n";
 import { useLayout } from "@/lib/layout";
 import { api } from "@/lib/api";
 import { colors, fonts, space } from "@/lib/theme";
+import { Empty } from "@/components/empty";
 
 type N = { id: string; kind: string; title: string; body: string; read: boolean; createdAt: string; groupId?: string | null };
 type Show = "all" | "new" | "reminder" | "pot" | "action" | "mediation";
@@ -66,7 +67,7 @@ export default function Notifications() {
         }
       >
       {items.length === 0 ? (
-        <Notice>{t("noNotifications")}</Notice>
+        <Empty icon="avisos" tone="verde" title={t("emNotif")} body={t("emNotifBody")} />
       ) : (
         <Chips
           value={show}
@@ -84,7 +85,7 @@ export default function Notifications() {
           ]}
         />
       )}
-      {items.length > 0 && list.length === 0 ? <Notice>{t("ntNone")}</Notice> : null}
+      {items.length > 0 && list.length === 0 ? <Empty icon="explorar" tone="naranja" title={t("emFilter")} body={t("emFilterBody")} action={{ label: t("mpClear"), onPress: () => setShow("all") }} /> : null}
       <View style={{ gap: space(3) }}>
         {list.slice(0, shown).map((n) => {
           const k = KIND[n.kind];

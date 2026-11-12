@@ -10,6 +10,7 @@ import { Legend } from "@/components/legend";
 import { GUARANTEE_HUE } from "@/lib/sched-colors";
 import type { GuaranteeItem, GuaranteeMember } from "@/components/guarantee-timeline-types";
 import { useI18n } from "@/lib/i18n";
+import { Empty } from "@/components/empty";
 import { useScheme } from "@/lib/scheme";
 import { api, money } from "@/lib/api";
 
@@ -56,7 +57,7 @@ export default function Guarantee() {
       </Card>
       {anyFailed && <Notice tone="error">{t("gtNoteFailed")}</Notice>}
       {!hasHeld ? (
-        <Notice>{held > 0 ? t("gtNoDetail") : t("gtEmpty")}</Notice>
+        <Empty icon="garantia" title={held > 0 ? t("emGuaranteeOld") : t("emGuarantee")} body={held > 0 ? t("gtNoDetail") : t("gtEmpty")} />
       ) : (
         <GuaranteeTimeline
           items={d.items}
