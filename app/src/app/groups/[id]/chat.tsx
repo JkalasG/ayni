@@ -10,7 +10,7 @@ import { useScheme } from "@/lib/scheme";
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Chips, Notice, P } from "@/components/ui";
+import { Button, Chips, Notice, P, Toggle } from "@/components/ui";
 import { Icon, type IconName } from "@/components/icons";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -50,7 +50,7 @@ const QUESTIONS: Key[] = ["chQ1", "chQ2", "chQ3"];
 export default function Chat() {
   useScheme(); // re-render when the color mode changes
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const { me } = useAuth();
   const [msgs, setMsgs] = useState<Msg[] | null>(null);
   const [text, setText] = useState("");
@@ -60,6 +60,24 @@ export default function Chat() {
   const [actions, setActions] = useState<ChatAction[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const list = useRef<FlatList<Msg>>(null);
+  // Translator: other people's messages are shown in the language of my app. One request for all the new ones.
+  const [translate, setTranslate] = useState(true);
+  const [canTranslate, setCanTranslate] = useState(true);
+  const [translated, setTranslated] = useState<Record<string, string>>({});
+  const [original, setOriginal] = useState<Record<string, boolean>>({});
+  const asked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!translate || !canTranslate || !msgs) return;
+    const ids = msgs.filter((m) => m.role === "user" && m.kind === "text" && !m.hidden && !m.private && m.userId !== me?.id && !asked.current.has(`${m.id}:${lang}`)).map((m) => m.id);
+    if (!ids.length) return;
+    ids.forEach((i) => asked.current.add(`${i}:${lang}`));
+    api<{ available: boolean; translations: Record<string, string> }>(`/groups/${id}/chat/translate`, { body: { ids: ids.slice(-60), lang } })
+      .then((r) => {
+        setCanTranslate(r.available);
+        setTranslated((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(r.translations).map(([k, v]) => [`${k}:${lang}`, v])) }));
+      })
+      .catch(() => ids.forEach((i) => asked.current.delete(`${i}:${lang}`)));
+  }, [msgs, lang, translate, canTranslate, id, me?.id]);
   const lastAt = useRef<string | null>(null);
 
   /** Full load the first time (and every so often, to pick up hidden messages); otherwise only what is new. */
@@ -126,7 +144,7 @@ export default function Chat() {
           onContentSizeChange={() => list.current?.scrollToEnd({ animated: true })}
           ListEmptyComponent={msgs ? <P muted>{t("chEmpty")}</P> : undefined}
           renderItem={({ item }) => (
-            <Bubble m={item} mine={item.userId === me?.id} selected={selected === item.id} onSelect={() => setSelected(selected === item.id ? null : item.id)} onHide={() => hide(item.id)} />
+            <Bubble m={item} translation={translate ? translated[`${item.id}:${lang}`] : undefined} showOriginal={!!original[item.id]} onFlip={() => setOriginal((o) => ({ ...o, [item.id]: !o[item.id] }))} mine={item.userId === me?.id} selected={selected === item.id} onSelect={() => setSelected(selected === item.id ? null : item.id)} onHide={() => hide(item.id)} />
           )}
           ListFooterComponent={
             <View style={{ gap: 8, marginTop: 8 }}>
@@ -153,6 +171,7 @@ export default function Chat() {
         <View style={{ borderTopWidth: 1, borderColor: colors.line, backgroundColor: colors.surface }}>
           <View style={{ padding: 12, gap: 10, maxWidth: 560, width: "100%", alignSelf: "center" }}>
             {error && <Notice tone="error">{error}</Notice>}
+            {canTranslate && <Toggle label={t("chTranslate")} value={translate} onChange={setTranslate} />}
             <Chips
               value={to}
               onChange={(v) => {
@@ -246,7 +265,7 @@ function EventCard({ m }: { m: Msg }) {
   );
 }
 
-function Bubble({ m, mine, selected, onSelect, onHide }: { m: Msg; mine: boolean; selected: boolean; onSelect: () => void; onHide: () => void }) {
+function Bubble({ m, mine, selected, onSelect, onHide, translation, showOriginal, onFlip }: { m: Msg; mine: boolean; selected: boolean; onSelect: () => void; onHide: () => void; translation?: string; showOriginal?: boolean; onFlip?: () => void }) {
   const { t } = useI18n();
   if (m.role === "system") return <EventCard m={m} />;
   const assistant = m.role === "assistant";
@@ -280,8 +299,15 @@ function Bubble({ m, mine, selected, onSelect, onHide }: { m: Msg; mine: boolean
           borderColor: mine ? colors.primaryInk : colors.line,
         }}
       >
-        <Text style={{ color: mine ? colors.primaryInk : colors.ink, fontFamily: fonts.body, fontSize: 15.5, lineHeight: 22 }}>{m.content}</Text>
+        <Text style={{ color: mine ? colors.primaryInk : colors.ink, fontFamily: fonts.body, fontSize: 15.5, lineHeight: 22 }}>{translation && !showOriginal ? translation : m.content}</Text>
       </Pressable>
+      {translation ? (
+        <Pressable onPress={onFlip} accessibilityRole="button" style={{ alignSelf: mine ? "flex-end" : "flex-start", minHeight: 28, justifyContent: "center" }}>
+          <Text style={{ fontFamily: fonts.body, fontSize: 12.5, color: colors.muted }}>
+            {showOriginal ? t("chTranslation") : `${t("chTranslated")} · ${t("chOriginal")}`}
+          </Text>
+        </Pressable>
+      ) : null}
       {selected && m.canHide && (
         <Pressable onPress={onHide} accessibilityRole="button" style={{ alignSelf: mine ? "flex-end" : "flex-start", minHeight: 40, justifyContent: "center" }}>
           <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: colors.danger }}>{t("chHide")}</Text>
