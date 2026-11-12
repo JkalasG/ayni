@@ -10,10 +10,15 @@ import { useScheme } from "@/lib/scheme";
 import { useI18n } from "@/lib/i18n";
 import { fonts, space } from "@/lib/theme";
 
-const W = 122;
+const W = 118;
 const H = 46;
+/** Room a button needs above it so the tag hangs outside it, not over its text. */
+export const TAG_ROOM = 28;
 
-/** `dark` is an ink tag with light letters; the other is a light tag with a dark outline. `hole` is the colour behind it. */
+/**
+ * The tag sits ABOVE the button and hangs from its top-right corner: the string ends exactly on that corner.
+ * `dark` is an ink tag with light letters; the other is a light tag with a dark outline. `hole` is the colour behind it.
+ */
 export function HangTag({ label, dark, hole, open, onPress }: { label: string; dark?: boolean; hole: string; open: boolean; onPress: () => void }) {
   const { c } = useScheme();
   const body = dark ? c.ink : c.surface;
@@ -23,19 +28,20 @@ export function HangTag({ label, dark, hole, open, onPress }: { label: string; d
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ expanded: open }}
-      hitSlop={8}
+      hitSlop={6}
       onPress={onPress}
-      style={({ hovered, pressed }: any) => ({ position: "absolute", top: -26, right: -10, width: W, height: H, zIndex: 2, transform: [{ rotate: hovered || pressed ? "-1deg" : "-5deg" }] })}
+      // bottom-right of this box is the button's top-right corner, and the tag swings from there
+      style={({ hovered, pressed }: any) => ({ position: "absolute", top: -H + 2, right: -4, width: W, height: H, zIndex: 2, transformOrigin: "100% 100%", transform: [{ rotate: hovered || pressed ? "-9deg" : "-4deg" }] })}
     >
       <Svg width={W} height={H} style={{ position: "absolute" }} pointerEvents="none">
-        {/* string and knot */}
-        <Path d="M96 26C102 14 112 14 114 6" stroke={c.ink} strokeWidth={2} fill="none" strokeLinecap="round" />
-        <Path d="M114 6C119 2 121 6 117 8" stroke={c.ink} strokeWidth={2} fill="none" strokeLinecap="round" />
         {/* the tag */}
-        <Path d="M3 10H84L101 21V31L84 42H3Q0 42 0 39V13Q0 10 3 10Z" fill={body} stroke={c.ink} strokeWidth={2} strokeLinejoin="round" />
-        <Circle cx={92} cy={26} r={3.6} fill={hole} stroke={c.ink} strokeWidth={1.6} />
+        <Path d="M5 3H78L95 13V23L78 33H5Q2 33 2 30V6Q2 3 5 3Z" fill={body} stroke={c.ink} strokeWidth={2} strokeLinejoin="round" />
+        <Circle cx={85} cy={18} r={3.6} fill={hole} stroke={c.ink} strokeWidth={1.6} />
+        {/* the string: through the hole, down to the button's corner, ending in a knot */}
+        <Path d="M85 18C92 30 104 30 112 41" stroke={c.ink} strokeWidth={2} fill="none" strokeLinecap="round" />
+        <Circle cx={112} cy={42} r={3} fill={c.ink} />
       </Svg>
-      <Text numberOfLines={1} style={{ position: "absolute", left: 12, top: 10, width: 66, height: 32, textAlignVertical: "center", lineHeight: 32, fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 0.3, color: text }}>
+      <Text numberOfLines={1} style={{ position: "absolute", left: 12, top: 3, width: 62, height: 30, lineHeight: 30, fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 0.3, color: text }}>
         {label}
       </Text>
     </Pressable>

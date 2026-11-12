@@ -12,7 +12,7 @@ import { Emblem } from "@/components/brand";
 import { Controls } from "@/components/controls";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
-import { HangTag, Dialog } from "@/components/hangtag";
+import { HangTag, Dialog, TAG_ROOM } from "@/components/hangtag";
 import { PayPalChip, PayPalWordmark } from "@/components/paypal";
 import { useAuth } from "@/lib/auth";
 import { useI18n, type Key } from "@/lib/i18n";
@@ -153,7 +153,7 @@ export default function Welcome() {
         ))}
       </Animated.View>
       <View style={{ gap: space(3) }}>
-        <View>
+        <View style={{ marginTop: demoUsers.length > 0 ? TAG_ROOM : 0 }}>
           <StepButton
             title={t("loginWith")}
             accessibilityLabel={t("loginPaypal")}
@@ -174,7 +174,7 @@ export default function Welcome() {
           onPress={() => router.push("/demo" as any)}
         />
         {demoUsers.length > 0 && (
-          <View>
+          <View style={{ marginTop: TAG_ROOM }}>
             <StepButton
               title={t("enterDemo")}
               fill={c.fucsia.fill}
