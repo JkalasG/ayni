@@ -41,6 +41,7 @@ import { summarizeDisputes } from "./ai/agent";
 import { groupBriefing, runBriefingStep } from "./ai/briefing";
 import { draftGroup } from "./ai/draft";
 import { translateMessages } from "./ai/translate";
+import { myCalendar } from "./services/calendar";
 import { hideMessage, listMessages, markRead, sendMessage } from "./services/chat";
 
 export const router = Router();
@@ -129,6 +130,8 @@ router.delete(
 router.delete("/me/payment-method", ...authed(async (req, res) => res.json(await removeSavedMethod(req.user))));
 /** Everything I paid and received through PayPal, across my groups. */
 router.get("/me/payments", ...authed(async (req, res) => res.json(await myLedger(req.user))));
+/** What I pay and receive, day by day, across all my pasanakus (past and estimated future). */
+router.get("/me/calendar", ...authed(async (req, res) => res.json(await myCalendar(req.user))));
 router.post(
   "/me/push-token",
   ...authed(async (req, res) => {

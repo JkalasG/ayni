@@ -109,6 +109,28 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "my_calendar",
+    title: "My money calendar",
+    description:
+      "What the member pays and receives, day by day, across all their circles: confirmed movements and estimates for the days to come. Use it to answer how much they will pay or receive on a date, or how much they will have by then.",
+    args: {},
+    run: async (api) => {
+      const r = await api("/me/calendar");
+      return {
+        today: String(r.now).slice(0, 10),
+        movements: (r.events ?? []).map((e: any) => ({
+          date: String(e.at).slice(0, 10),
+          circle: e.groupName,
+          what: e.kind === "pay" ? "contribution" : e.kind === "receive" ? "pot received" : "guarantee returned",
+          round: e.round,
+          amount: (e.kind === "pay" ? "-" : "+") + usd(e.amountCents),
+          status: e.status,
+          estimated: e.estimated,
+        })),
+      };
+    },
+  },
+  {
     name: "my_trust_profile",
     title: "My trust profile",
     description: "The member's trust profile: circles completed, on-time payments and late payments, built only from payment behaviour inside Ayni.",

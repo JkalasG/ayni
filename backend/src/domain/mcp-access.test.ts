@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mcpAllowed } from "./mcp-access";
 
 test("a read-only key can only read the allowlisted endpoints", () => {
-  for (const path of ["/me/profile", "/me/payments", "/groups", "/groups/abc123", "/groups/abc123/ledger", "/groups/abc123/claims"])
+  for (const path of ["/me/profile", "/me/payments", "/me/calendar", "/groups", "/groups/abc123", "/groups/abc123/ledger", "/groups/abc123/claims"])
     assert.equal(mcpAllowed("GET", path), true, path);
 });
 

@@ -6,6 +6,7 @@
 const ALLOWED: RegExp[] = [
   /^\/me\/profile$/,
   /^\/me\/payments$/,
+  /^\/me\/calendar$/,
   /^\/groups$/,
   /^\/groups\/[A-Za-z0-9_-]+$/,
   /^\/groups\/[A-Za-z0-9_-]+\/ledger$/,
