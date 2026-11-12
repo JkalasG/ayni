@@ -16,6 +16,7 @@
     "test:e2e": "tsx test/e2e.ts",
     "test:smoke": "node test/smoke.mjs",
     "test:mcp": "node test/mcp.mjs",
+    "test:ai": "tsx test/ai-eval.ts",
     "mcp": "tsx src/mcp/server.ts",
     "mock:reset": "tsx src/mock/reset.ts"
   },
