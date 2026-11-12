@@ -10,15 +10,8 @@ client_secret*.json
 *.pem
 *.key
 
-# private notes (mention other teams): never publish
-INSTRUCCIONES_AYNI.md
-
 # local database of APP_MODE=mock
 backend/.mock-db/
 
 # screenshots left by tools/real-data when PayPal shows something unexpected
 tools/real-data/screenshots/
-
-# the video tool: work files, the video and its dependencies
-tools/video/work/
-tools/video/out/

@@ -24,7 +24,7 @@ Sistema de diseño aplicado a toda la app, en modo claro y oscuro.
 
 ## 3. Paleta final y contraste verificado
 
-Ajusté la paleta del prompt. En modo claro, varios colores de estado no llegaban a 4.5:1 como texto (el amarillo `#C99500` daba 2.5:1 sobre el fondo). Por eso cada color tiene dos versiones:
+En modo claro, varios colores de estado no llegaban a 4.5:1 como texto (el amarillo `#C99500` daba 2.5:1 sobre el fondo). Por eso cada color tiene dos versiones:
 
 - **`fill`:** para gráficos (puntadas, rellenos, íconos). Mínimo 3:1 sobre `bg`, `surface` y `surfaceAlt`.
 - **`text`:** para texto. Mínimo 4.5:1 sobre `bg`, `surface` y `surfaceAlt`.

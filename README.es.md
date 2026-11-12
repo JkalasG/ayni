@@ -1,5 +1,9 @@
 <div align="center">
 
+<img src="propuesta/png/logos/ayni-icono-app.png" alt="Ayni" width="96">
+
+<br><br>
+
 <img src="docs/banner-es.png" alt="Ayni. Hoy por ti, mañana por mí. Sin límites, sin fronteras." width="100%">
 
 <br>
@@ -11,7 +15,7 @@
 
 **Ayni convierte el pasanaku en el que millones de familias ya confían en algo que funciona entre vecinos, entre países y entre desconocidos: cada pago por PayPal y una IA que propone, pero nunca toca el dinero.**
 
-[▶ Video de la demo](YOUTUBE_URL) &nbsp;·&nbsp; [🌐 Demo en línea](DEMO_URL) &nbsp;·&nbsp; [📱 APK de Android](APK_URL) &nbsp;·&nbsp; [🧪 Jurado: cuentas de prueba](#-pruébalo-en-dos-minutos)
+[▶ Video de la demo](https://youtu.be/a0-sTMQHN94) &nbsp;·&nbsp; [🌐 Demo en línea](https://ayni.devsjec.com/) &nbsp;·&nbsp; [🧪 Jurado: cuentas de prueba](#-pruébalo-en-dos-minutos)
 
 [![CI](https://github.com/JkalasG/ayni/actions/workflows/ci.yml/badge.svg)](https://github.com/JkalasG/ayni/actions/workflows/ci.yml)
 ![PayPal sandbox](https://img.shields.io/badge/PayPal-12_capacidades-003087?logo=paypal&logoColor=white)
@@ -107,7 +111,7 @@ Y debajo de todo: **cada centavo pasa por PayPal.** Los miembros pagan con PayPa
 <td width="33%"><img src="docs/screenshots/es/mobile-dark.png" alt="Celular: modo oscuro"></td>
 </tr>
 <tr>
-<td align="center"><sub>App Android + web, un solo código</sub></td>
+<td align="center"><sub>Móvil + web, un solo código</sub></td>
 <td align="center"><sub>Pensada primero para el celular</sub></td>
 <td align="center"><sub>Claro y oscuro, español e inglés</sub></td>
 </tr>
@@ -136,7 +140,7 @@ Y debajo de todo: **cada centavo pasa por PayPal.** Los miembros pagan con PayPa
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots/es/group.png" alt="El asistente lee la ronda"><br><sub><b>Lee la ronda y dice qué hacer.</b> Hay dos aportes pendientes en la ronda 4: un recordatorio amistoso para Marisol (buen historial) y una factura de PayPal para Don Efraín (antecedentes de atraso). Cada paso trae su razón, y nada pasa hasta que la organizadora toca.</sub></td>
+<td width="50%"><img src="docs/screenshots/es/group.png" alt="El asistente lee la ronda"><br><sub><b>Lee la ronda y dice qué hacer.</b> "El grupo tiene un día de retraso en la recolección de la ronda 4 y faltan dos aportes para completarla." Un recordatorio amistoso para Marisol (92% a tiempo) y una factura de PayPal para Don Efraín (63%, tres atrasos). Cada paso trae su razón, y nada pasa hasta que la organizadora toca.</sub></td>
 <td width="50%"><img src="docs/screenshots/es/chat.png" alt="Asistente privado en el chat del grupo"><br><sub><b>Responde con datos reales, en privado.</b> En el chat del grupo, una pregunta a Ayni y su respuesta solo las ve quien preguntó.</sub></td>
 </tr>
 <tr>
@@ -268,10 +272,10 @@ También en la app: **reclamos** (un miembro reporta un problema con un aporte; 
 | Criterio | Lo que aporta Ayni | Dónde verlo |
 |---|---|---|
 | **Implementación tecnológica** | 12 capacidades de PayPal en un flujo coherente, IA con herramientas sobre datos reales, un servidor MCP de solo lectura, webhooks verificados, movimientos de dinero idempotentes | [Tabla de PayPal](#dónde-se-usa-paypal) · [Seguridad del dinero](#seguridad-del-dinero) · `backend/test/e2e.ts` |
-| **Diseño** | Un producto completo: Android + web con un solo código, claro y oscuro, español e inglés, una identidad tomada del tejido andino | [Míralo](#míralo) · [`propuesta/`](propuesta/) |
+| **Diseño** | Un producto completo: móvil + web con un solo código, claro y oscuro, español e inglés, una identidad tomada del tejido andino | [Míralo](#míralo) · [`propuesta/`](propuesta/) |
 | **Impacto potencial** | Una tradición que ya mueve dinero para cientos de millones de personas, su falla más conocida y una forma de llevarla al otro lado de las fronteras | [La historia](#la-historia-detrás-de-ayni) · [Para quién sirve](#para-quién-sirve) |
 | **Innovación / idea** | Una garantía que baja según el turno, confianza hecha solo con el comportamiento de pago y una IA auditable por diseño | [Lo que hace Ayni](#lo-que-hace-ayni) · [Cuatro reglas](#cuatro-reglas-que-la-ia-no-puede-romper) |
-| **Presentación** | Un ciclo completo (pagar, atraso, cobertura, pozo enviado) en pantalla en menos de tres minutos: el modo demo reduce las rondas a minutos | [Video de la demo](YOUTUBE_URL) |
+| **Presentación** | Un ciclo completo (pagar, atraso, cobertura, pozo enviado) en pantalla en menos de tres minutos: el modo demo reduce las rondas a minutos | [Video de la demo](https://youtu.be/a0-sTMQHN94) |
 
 **Construido durante el período de presentación.** El primer commit del repositorio es del 4 de noviembre de 2026; todo lo descrito aquí se construyó después.
 
@@ -282,8 +286,8 @@ También en la app: **reclamos** (un miembro reporta un problema con un aporte; 
 ```mermaid
 flowchart LR
   subgraph Personas
-    M[Miembro<br>Android · web]
-    O[Organizadora<br>Android · web]
+    M[Miembro<br>móvil · web]
+    O[Organizadora<br>móvil · web]
     X[La IA del miembro<br>cliente MCP]
   end
   M & O --> APP[App Expo<br>React Native + web<br>Bryntum en web]
@@ -317,7 +321,7 @@ flowchart LR
 
 ## 🧪 Pruébalo en dos minutos
 
-**Demo en línea:** [DEMO_URL](DEMO_URL)
+**Demo en línea:** [https://ayni.devsjec.com/](https://ayni.devsjec.com/)
 
 En la pantalla de bienvenida cuelgan dos etiquetas de los botones:
 
@@ -379,7 +383,7 @@ npm run dev
 cd ../app
 cp .env.example .env          # EXPO_PUBLIC_API_URL = la URL de tu backend
 npm install
-npx expo start                # escanea el QR con Expo Go (Android), o pulsa "w" para web
+npx expo start                # escanea el QR con Expo Go, o pulsa "w" para web
 ```
 
 Configuración de PayPal (sandbox, developer.paypal.com → Apps & Credentials → tu app):
@@ -402,8 +406,6 @@ npm run test:ai                                               # la evaluación d
 E2E_DATABASE_URL=postgresql://.../ayni_e2e npm run test:e2e   # flujos completos, necesita una base VACÍA
 npm run mock:reset && npm run dev   # luego, en otra terminal:  npm run test:smoke   (todos los endpoints, modo simulado)
 ```
-
-APK de Android: `cd app && npx eas init && npx eas build -p android --profile preview` (define `EXPO_PUBLIC_API_URL` en `eas.json`). Las notificaciones push en el APK además necesitan credenciales FCM (`npx eas credentials`).
 
 ---
 

@@ -88,11 +88,7 @@ En developer.paypal.com → tu app (reemplaza `TU_DOMINIO`):
 
 > Las URLs llevan **`/api`** porque la API cuelga de ese prefijo. Si PayPal rechaza la Return URL, revisa que coincida letra por letra con `https://TU_DOMINIO/api/auth/paypal/callback`.
 
-## 5. APK de Android
-
-En `app/eas.json`, perfil `preview`, pon `EXPO_PUBLIC_API_URL` = `https://TU_DOMINIO/api` y construye con `npx eas build -p android --profile preview` (ver README).
-
-## 5b. Llenar PayPal con actividad real (opcional)
+## 5. Llenar PayPal con actividad real (opcional)
 
 El seed deja datos de muestra en Ayni, pero PayPal sandbox queda vacío. El script de `tools/real-data` lo llena de verdad: cada miembro paga con su cuenta sandbox en PayPal Checkout (Chrome lo maneja solo) y la organizadora envía los pozos con Payouts. Se ejecuta **desde tu PC**, contra tu servidor:
 

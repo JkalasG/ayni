@@ -1,5 +1,9 @@
 <div align="center">
 
+<img src="propuesta/png/logos/ayni-icono-app.png" alt="Ayni" width="96">
+
+<br><br>
+
 <img src="docs/banner-en.png" alt="Ayni. Today for you, tomorrow for me. No limits, no borders." width="100%">
 
 <br>
@@ -11,7 +15,7 @@
 
 **Ayni turns the savings circle that millions of families already trust into something that works between neighbors, between countries and between strangers: every payment on PayPal, and an AI that proposes but never touches the money.**
 
-[▶ Demo video](YOUTUBE_URL) &nbsp;·&nbsp; [🌐 Live demo](DEMO_URL) &nbsp;·&nbsp; [📱 Android APK](APK_URL) &nbsp;·&nbsp; [🧪 Judges: test accounts](#-try-it-in-two-minutes)
+[▶ Demo video](https://youtu.be/a0-sTMQHN94) &nbsp;·&nbsp; [🌐 Live demo](https://ayni.devsjec.com/) &nbsp;·&nbsp; [🧪 Judges: test accounts](#-try-it-in-two-minutes)
 
 [![CI](https://github.com/JkalasG/ayni/actions/workflows/ci.yml/badge.svg)](https://github.com/JkalasG/ayni/actions/workflows/ci.yml)
 ![PayPal sandbox](https://img.shields.io/badge/PayPal-12_capabilities-003087?logo=paypal&logoColor=white)
@@ -107,7 +111,7 @@ And underneath all of it: **every cent moves through PayPal.** Members pay with 
 <td width="33%"><img src="docs/screenshots/en/mobile-dark.png" alt="Phone: dark mode"></td>
 </tr>
 <tr>
-<td align="center"><sub>Android app + web, one codebase</sub></td>
+<td align="center"><sub>Mobile + web, one codebase</sub></td>
 <td align="center"><sub>Built for the phone first</sub></td>
 <td align="center"><sub>Light and dark, English and Spanish</sub></td>
 </tr>
@@ -268,10 +272,10 @@ Also in the app: **claims** (a member reports a problem with a contribution; a P
 | Criterion | What Ayni brings | Where to look |
 |---|---|---|
 | **Technological implementation** | 12 PayPal capabilities in one coherent flow, AI with tool use over real data, a read-only MCP server, verified webhooks, idempotent money movements | [PayPal table](#where-paypal-is-used) · [Money safety](#money-safety) · `backend/test/e2e.ts` |
-| **Design** | A complete product: Android + web from one codebase, light and dark, English and Spanish, an identity drawn from Andean weaving | [See it](#see-it) · [`propuesta/`](propuesta/) |
+| **Design** | A complete product: mobile + web from one codebase, light and dark, English and Spanish, an identity drawn from Andean weaving | [See it](#see-it) · [`propuesta/`](propuesta/) |
 | **Potential impact** | A tradition that already moves money for hundreds of millions of people, its best-known failure, and a way to carry it across borders | [The story](#the-story-behind-ayni) · [Who it is for](#who-it-is-for) |
 | **Innovation / idea** | A guarantee that tapers with the turn, trust built only from payment behavior, and AI that is auditable by design | [What Ayni does](#what-ayni-does-about-it) · [Four rules](#four-rules-the-ai-cannot-break) |
-| **Presentation** | A full cycle (pay, late, covered, pot sent) on screen in under three minutes: demo mode shrinks rounds to minutes | [Demo video](YOUTUBE_URL) |
+| **Presentation** | A full cycle (pay, late, covered, pot sent) on screen in under three minutes: demo mode shrinks rounds to minutes | [Demo video](https://youtu.be/a0-sTMQHN94) |
 
 **Built during the submission period.** The repository's first commit is from 4 November 2026; everything described here was built after that.
 
@@ -282,8 +286,8 @@ Also in the app: **claims** (a member reports a problem with a contribution; a P
 ```mermaid
 flowchart LR
   subgraph People
-    M[Member<br>Android · web]
-    O[Organizer<br>Android · web]
+    M[Member<br>mobile · web]
+    O[Organizer<br>mobile · web]
     X[Member's own AI<br>MCP client]
   end
   M & O --> APP[Expo app<br>React Native + web<br>Bryntum on web]
@@ -317,7 +321,7 @@ flowchart LR
 
 ## 🧪 Try it in two minutes
 
-**Hosted demo:** [DEMO_URL](DEMO_URL)
+**Hosted demo:** [https://ayni.devsjec.com/](https://ayni.devsjec.com/)
 
 On the welcome screen, two tags hang from the buttons:
 
@@ -379,7 +383,7 @@ npm run dev
 cd ../app
 cp .env.example .env          # EXPO_PUBLIC_API_URL = your backend URL
 npm install
-npx expo start                # scan the QR with Expo Go (Android), or press "w" for web
+npx expo start                # scan the QR with Expo Go, or press "w" for web
 ```
 
 PayPal setup (sandbox, developer.paypal.com → Apps & Credentials → your app):
@@ -402,8 +406,6 @@ npm run test:ai                                               # the AI evaluatio
 E2E_DATABASE_URL=postgresql://.../ayni_e2e npm run test:e2e   # full flows, needs an EMPTY database
 npm run mock:reset && npm run dev   # then, in another terminal:  npm run test:smoke   (every endpoint, mock mode)
 ```
-
-Android APK: `cd app && npx eas init && npx eas build -p android --profile preview` (set `EXPO_PUBLIC_API_URL` in `eas.json`). Push notifications in the APK also need FCM credentials (`npx eas credentials`).
 
 ---
 
