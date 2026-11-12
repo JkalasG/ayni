@@ -70,11 +70,16 @@ router.get(
     if (!req.query.code) return res.redirect(appendQuery(redirect, { error: "login_cancelled" }));
     const token = await paypal.exchangeLoginCode(String(req.query.code));
     const info = await paypal.getUserInfo(token);
-    const user = await db.user.upsert({
-      where: { paypalUserId: info.userId },
-      update: { email: info.email, name: info.name, paypalVerified: true, ...(info.payerId ? { paypalPayerId: info.payerId } : {}) },
-      create: { paypalUserId: info.userId, paypalPayerId: info.payerId, email: info.email, name: info.name, paypalVerified: true },
-    });
+    // A judge logging in with one of the sandbox accounts the demo members were seeded with lands on THAT member (their
+    // groups, history and passport), not on an empty new account. Only while demo login is on.
+    const seeded = config.enableDemoLogin ? await db.user.findFirst({ where: { email: info.email, paypalUserId: { startsWith: "demo-" } } }) : null;
+    const user = seeded
+      ? await db.user.update({ where: { id: seeded.id }, data: { paypalVerified: true, ...(info.payerId ? { paypalPayerId: info.payerId } : {}) } })
+      : await db.user.upsert({
+          where: { paypalUserId: info.userId },
+          update: { email: info.email, name: info.name, paypalVerified: true, ...(info.payerId ? { paypalPayerId: info.payerId } : {}) },
+          create: { paypalUserId: info.userId, paypalPayerId: info.payerId, email: info.email, name: info.name, paypalVerified: true },
+        });
     res.redirect(appendQuery(redirect, { token: issueToken(user.id) }));
   })
 );
@@ -83,6 +88,11 @@ router.get(
 router.get("/auth/demo/users", async (_req, res) => {
   if (!config.enableDemoLogin) return res.status(404).end();
   res.json(await db.user.findMany({ where: { paypalUserId: { startsWith: "demo-" } }, select: { id: true, name: true, email: true } }));
+});
+/** For the welcome screen: the shared password of the sandbox accounts, if the person running this set one. */
+router.get("/auth/demo/sandbox", (_req, res) => {
+  if (!config.enableDemoLogin) return res.status(404).end();
+  res.json({ password: config.demoMemberPassword || null });
 });
 router.post(
   "/auth/demo",

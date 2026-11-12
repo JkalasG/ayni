@@ -28,6 +28,9 @@ export const config = {
   appScheme: process.env.APP_SCHEME ?? "ayni",
   allowExpoGoRedirects: process.env.NODE_ENV !== "production" || process.env.ALLOW_EXPO_GO === "true",
   enableDemoLogin: mock || process.env.ENABLE_DEMO_LOGIN === "true",
+  // The password the sandbox personal accounts share. Shown to judges on the welcome screen next to the accounts, only
+  // while demo login is on (these are PayPal Sandbox accounts: they hold no real money).
+  demoMemberPassword: process.env.DEMO_MEMBER_PASSWORD ?? "",
   paypal: mock
     ? {
         clientId: "mock-client",
