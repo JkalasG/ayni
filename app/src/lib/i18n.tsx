@@ -1899,22 +1899,34 @@ export type Lang = "es" | "en";
 export type Key = keyof typeof es;
 const dict = { es, en };
 
-function deviceLang(): Lang {
+/** English unless the person chose Spanish (web remembers the choice). */
+const LANG_KEY = "ayni_lang";
+function initialLang(): Lang {
   try {
-    return Intl.DateTimeFormat().resolvedOptions().locale.startsWith("en") ? "en" : "es";
+    const saved = globalThis.localStorage?.getItem(LANG_KEY);
+    if (saved === "es" || saved === "en") return saved;
   } catch {
-    return "es";
+    /* no storage: fall through */
   }
+  return "en";
 }
 
 const Ctx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: Key) => string }>({
-  lang: "es",
+  lang: "en",
   setLang: () => {},
-  t: (k) => es[k],
+  t: (k) => en[k],
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>(deviceLang());
+  const [lang, setLangState] = useState<Lang>(initialLang);
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    try {
+      globalThis.localStorage?.setItem(LANG_KEY, l);
+    } catch {
+      /* no storage: the choice lasts until the page is closed */
+    }
+  };
   const value = useMemo(() => ({ lang, setLang, t: (k: Key) => dict[lang][k] }), [lang]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

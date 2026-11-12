@@ -96,6 +96,8 @@ async function loadMembers() {
   for (const u of list) {
     const { token } = await call(null, "POST", "/auth/demo", { userId: u.id });
     members[u.name] = { ...u, token };
+    // the assistant answers in the member's language: the demo runs in English
+    if (!CHECK) await call(token, "PATCH", "/me", { locale: "en" }).catch(() => {});
   }
   return members;
 }
