@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useScheme } from "@/lib/scheme";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { Button, Field, FormHeader, Notice, Screen } from "@/components/ui";
+import { Guide, TwoCol } from "@/components/guide";
+import { useLayout } from "@/lib/layout";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
@@ -11,6 +13,7 @@ import { errorText } from "@/lib/errors";
 export default function Join() {
   useScheme(); // re-render when the color mode changes
   const { t } = useI18n();
+  const { wide } = useLayout();
   const { me, loading } = useAuth();
   const params = useLocalSearchParams<{ code?: string }>();
   const [code, setCode] = useState(params.code ?? "");
@@ -36,8 +39,21 @@ export default function Join() {
   };
 
   return (
-    <Screen>
+    <Screen width={wide ? 1240 : 640}>
       <Stack.Screen options={{ title: t("join") }} />
+      <TwoCol
+        side={
+          <Guide
+            title={t("jnGuide")}
+            steps={[
+              { title: t("jnG1"), body: t("jnG1b") },
+              { title: t("jnG2"), body: t("jnG2b") },
+              { title: t("jnG3"), body: t("jnG3b") },
+            ]}
+            note={t("jnNote")}
+          />
+        }
+      >
       <FormHeader icon="pagar" hint={t("joinHint")} />
       <Field
         label={t("code")}
@@ -55,6 +71,7 @@ export default function Join() {
       />
       {error && <Notice tone="error">{error}</Notice>}
       <Button title={t("joinBtn")} onPress={submit} loading={busy} disabled={code.length < 4} />
+      </TwoCol>
     </Screen>
   );
 }

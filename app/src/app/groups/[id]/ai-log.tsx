@@ -2,7 +2,9 @@ import { useCallback, useState } from "react";
 import { useScheme } from "@/lib/scheme";
 import { Pressable, View } from "react-native";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { Badge, Card, H2, Loading, P, Screen } from "@/components/ui";
+import { Badge, Card, Chips, H2, Loading, Notice, P, Screen } from "@/components/ui";
+import { Guide, TwoCol } from "@/components/guide";
+import { useLayout } from "@/lib/layout";
 import { useI18n, type Key } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { colors } from "@/lib/theme";
@@ -38,6 +40,8 @@ export default function AiLog() {
   const { t, lang } = useI18n();
   const [items, setItems] = useState<Entry[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [kind, setKind] = useState("all");
+  const { wide } = useLayout();
 
   useFocusEffect(
     useCallback(() => {
@@ -47,11 +51,29 @@ export default function AiLog() {
 
   if (!items) return <><Stack.Screen options={{ title: t("aiLog") }} /><Loading /></>;
   return (
-    <Screen>
+    <Screen width={wide ? 1240 : 640}>
       <Stack.Screen options={{ title: t("aiLog") }} />
       <P muted>{t("aiLogHint")}</P>
-      {items.length === 0 && <P muted>{t("noAiLog")}</P>}
-      {items.map((e) => {
+      <TwoCol
+        side={
+          <Guide
+            title={t("alGuide")}
+            steps={[
+              { title: t("alG1"), body: t("alG1b") },
+              { title: t("alG2"), body: t("alG2b") },
+              { title: t("alG3"), body: t("alG3b") },
+              { title: t("alG4"), body: t("alG4b") },
+            ]}
+            note={t("alNote")}
+          />
+        }
+      >
+      {items.length === 0 ? (
+        <Notice>{t("noAiLog")}</Notice>
+      ) : (
+        <Chips value={kind} onChange={setKind} options={[{ value: "all", label: `${t("lgAll")} (${items.length})` }, ...[...new Set(items.map((e) => e.kind))].map((k) => ({ value: k, label: t(`kind_${k}` as Key) }))]} />
+      )}
+      {items.filter((e) => kind === "all" || e.kind === kind).map((e) => {
         const lines = consultedSummary(e.consulted);
         return (
           <Pressable key={e.id} onPress={() => setOpen(open === e.id ? null : e.id)} accessibilityRole="button">
@@ -79,6 +101,7 @@ export default function AiLog() {
           </Pressable>
         );
       })}
+      </TwoCol>
     </Screen>
   );
 }
