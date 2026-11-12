@@ -37,6 +37,8 @@ services:
         value: claude-sonnet-5-5
       - key: DEMO_MEMBER_EMAILS
         sync: false # sandbox personal accounts, only used by `npm run db:seed`
+      - key: DEMO_MEMBER_PASSWORD
+        sync: false # shared password of those accounts; the welcome screen shows it to judges
 
   - type: web
     name: ayni-web

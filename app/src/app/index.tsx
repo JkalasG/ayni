@@ -3,7 +3,7 @@ import { Platform, Pressable, ScrollView, Share, Text, useWindowDimensions, View
 import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Loading } from "@/components/ui";
 import { AguayoBand, AguayoUnfold } from "@/components/aguayo";
 import { Altiplano } from "@/components/altiplano";
@@ -12,6 +12,7 @@ import { Emblem } from "@/components/brand";
 import { Controls } from "@/components/controls";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
+import { HangTag, Dialog } from "@/components/hangtag";
 import { PayPalChip, PayPalWordmark } from "@/components/paypal";
 import { useAuth } from "@/lib/auth";
 import { useI18n, type Key } from "@/lib/i18n";
@@ -32,6 +33,21 @@ const DEMO_HINT: Record<string, Key> = {
   Kusi: "hintKusi",
 };
 
+/** One line of a credential: what it is, the value (selectable) and its own copy button. */
+function CredRow({ label, value, done, onCopy }: { label: string; value: string; done: boolean; onCopy: () => void }) {
+  const { c } = useScheme();
+  const { t } = useI18n();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: c.surfaceAlt, paddingLeft: 10 }}>
+      <Text style={{ width: 62, fontFamily: fonts.bodyBold, fontSize: 12.5, color: c.muted }}>{label}</Text>
+      <Text selectable numberOfLines={1} style={{ flex: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: c.ink }}>{value}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${t("sbxCopy")} ${label}`} onPress={onCopy} style={{ minHeight: 40, minWidth: 84, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: c.line, backgroundColor: c.surface }}>
+        <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.ink }}>{done ? t("sbxCopied") : t("sbxCopy")}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function Welcome() {
   const { me, loading, loginWithPayPal, loginAsDemo } = useAuth();
   const { t } = useI18n();
@@ -40,10 +56,10 @@ export default function Welcome() {
   const [demoUsers, setDemoUsers] = useState<DemoUser[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [showDemo, setShowDemo] = useState(false);
+  const [showCreds, setShowCreds] = useState(false);
   const [error, setError] = useState<Key | null>(null);
   const [attempt, setAttempt] = useState(0);
   const { height } = useWindowDimensions();
-  const [showSandbox, setShowSandbox] = useState(false);
   const [sandboxPassword, setSandboxPassword] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -95,13 +111,13 @@ export default function Welcome() {
   // On a computer the left side is the sky with the people at the bottom: what goes on top is sized from the height of
   // the window, so the words always end above the people instead of running over them.
   const peopleH = Math.max(170, Math.min(290, Math.round(height * 0.3)));
-  const word = height < 720 ? 96 : height < 880 ? 128 : 160;
+  const word = height < 720 ? 112 : height < 880 ? 144 : 176;
   const brand = (big: boolean) => (
     <View style={{ gap: big ? Math.round(word / 8) : 10 }}>
-      <Emblem size={big ? Math.round(word * 0.5) : 64} />
+      <Emblem size={big ? Math.round(word * 0.72) : 88} />
       <Text
         accessibilityRole="header"
-        style={{ fontFamily: fonts.displayHeavy, fontSize: big ? word : 92, lineHeight: big ? word + 4 : 98, color: c.ink, letterSpacing: big ? -word / 21 : -4, marginLeft: big ? -word / 21 : -4 }}
+        style={{ fontFamily: fonts.displayHeavy, fontSize: big ? word : 104, lineHeight: big ? word + 4 : 110, color: c.ink, letterSpacing: big ? -word / 21 : -4, marginLeft: big ? -word / 21 : -4 }}
       >
         ayni
       </Text>
@@ -137,15 +153,18 @@ export default function Welcome() {
         ))}
       </Animated.View>
       <View style={{ gap: space(3) }}>
-        <StepButton
-          title={t("loginWith")}
-          accessibilityLabel={t("loginPaypal")}
-          fill={c.paypal}
-          ink={c.paypalInk}
-          loading={busy === "pp"}
-          right={<PayPalWordmark size={22} />}
-          onPress={() => login("pp", loginWithPayPal)}
-        />
+        <View>
+          <StepButton
+            title={t("loginWith")}
+            accessibilityLabel={t("loginPaypal")}
+            fill={c.paypal}
+            ink={c.paypalInk}
+            loading={busy === "pp"}
+            right={<PayPalWordmark size={22} />}
+            onPress={() => login("pp", loginWithPayPal)}
+          />
+          {demoUsers.length > 0 && <HangTag dark label={t("tagCreds")} hole={c.paypal} open={showCreds} onPress={() => setShowCreds(true)} />}
+        </View>
         <StepButton
           title={t("demoSeeIt")}
           fill={c.surface}
@@ -155,76 +174,35 @@ export default function Welcome() {
           onPress={() => router.push("/demo" as any)}
         />
         {demoUsers.length > 0 && (
-          <StepButton
-            title={t("enterDemo")}
-            fill={c.fucsia.fill}
-            ink={c.onAction}
-            expanded={showDemo}
-            left={<Icon name="grupos" size={20} color={c.onAction} />}
-            onPress={() => setShowDemo((v) => !v)}
-          />
+          <View>
+            <StepButton
+              title={t("enterDemo")}
+              fill={c.fucsia.fill}
+              ink={c.onAction}
+              expanded={showDemo}
+              left={<Icon name="grupos" size={20} color={c.onAction} />}
+              onPress={() => setShowDemo(true)}
+            />
+            <HangTag label={t("tagMembers")} hole={c.fucsia.fill} open={showDemo} onPress={() => setShowDemo(true)} />
+          </View>
         )}
-      </View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <PayPalChip />
-        <Text style={{ flex: 1, minWidth: 180, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>{t("ppFlow")}</Text>
-      </View>
-      {error && (
-        <View accessibilityRole="alert" style={{ gap: space(2), borderLeftWidth: 4, borderColor: c.rojo.fill, backgroundColor: c.surface, padding: space(4) }}>
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, lineHeight: 22, color: c.rojo.text }}>{t(error)}</Text>
-          <Pressable accessibilityRole="button" onPress={() => { setError(null); setAttempt((n) => n + 1); }} style={{ minHeight: 44, justifyContent: "center" }}>
-            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, color: c.ink, textDecorationLine: "underline" }}>{t("retry")}</Text>
-          </Pressable>
-        </View>
-      )}
-      {demoUsers.length > 0 && (
-        <View style={{ gap: space(3) }}>
-          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showSandbox }} onPress={() => setShowSandbox((v) => !v)} style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <PayPalChip />
-            <Text style={{ flex: 1, fontFamily: fonts.bodyBold, fontSize: 15, color: c.ink, textDecorationLine: "underline" }}>{t("sbxButton")}</Text>
-            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 18, color: c.muted }}>{showSandbox ? "−" : "+"}</Text>
-          </Pressable>
-          {showSandbox && (
-            <Animated.View entering={FadeIn.duration(260)}>
-              <SteppedBox fill={c.surface} stroke={c.paypal} step={5} style={{ padding: space(4), gap: space(3) }}>
-                <Text style={{ fontFamily: fonts.display, fontSize: 17, color: c.ink }}>{t("sbxTitle")}</Text>
-                <Text style={{ fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: c.muted }}>{t("sbxHow")}</Text>
-                <View style={{ gap: 2, padding: space(3), backgroundColor: c.surfaceAlt }}>
-                  <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13, color: c.muted }}>{t("sbxPassword")}</Text>
-                  {sandboxPassword ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                      <Text selectable style={{ flex: 1, fontFamily: fonts.displayHeavy, fontSize: 18, color: c.ink }}>{sandboxPassword}</Text>
-                      <Pressable accessibilityRole="button" onPress={() => copy("pw", sandboxPassword)} style={{ minHeight: 36, paddingHorizontal: 10, justifyContent: "center", borderWidth: 2, borderColor: c.line }}>
-                        <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.ink }}>{copied === "pw" ? t("sbxCopied") : t("sbxCopy")}</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>{t("sbxNoPassword")}</Text>
-                  )}
+        <Dialog visible={showCreds && demoUsers.length > 0} title={t("sbxTitle")} onClose={() => setShowCreds(false)}>
+          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: c.muted }}>{t("sbxHow")}</Text>
+          {!sandboxPassword && <Text style={{ fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>{t("sbxNoPassword")}</Text>}
+          <View style={{ borderTopWidth: 1, borderColor: c.line }}>
+            {demoUsers.map((u) => (
+              <View key={u.id} style={{ gap: 6, paddingVertical: 10, borderBottomWidth: 1, borderColor: c.line }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <WovenAvatar id={u.id} name={u.name} size={28} />
+                  <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, color: c.ink }}>{u.name}</Text>
                 </View>
-                <View style={{ borderTopWidth: 1, borderColor: c.line }}>
-                  {demoUsers.map((u) => (
-                    <View key={u.id} style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 56, paddingVertical: 8, borderBottomWidth: 1, borderColor: c.line }}>
-                      <WovenAvatar id={u.id} name={u.name} size={36} />
-                      <View style={{ flex: 1, gap: 1 }}>
-                        <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: c.ink }}>{u.name}</Text>
-                        <Text selectable numberOfLines={1} style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted }}>{u.email}</Text>
-                      </View>
-                      <Pressable accessibilityRole="button" accessibilityLabel={`${t("sbxCopy")} ${u.email}`} onPress={() => copy(u.id, u.email)} style={{ minHeight: 36, paddingHorizontal: 10, justifyContent: "center", borderWidth: 2, borderColor: c.line }}>
-                        <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.ink }}>{copied === u.id ? t("sbxCopied") : t("sbxCopy")}</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-                <StepButton title={t("loginWith")} accessibilityLabel={t("loginPaypal")} fill={c.paypal} ink={c.paypalInk} loading={busy === "pp"} right={<PayPalWordmark size={20} />} onPress={() => login("pp", loginWithPayPal)} />
-              </SteppedBox>
-            </Animated.View>
-          )}
-        </View>
-      )}
-      {showDemo && demoUsers.length > 0 && (
-        <Animated.View entering={FadeIn.duration(260)} style={{ gap: space(2) }}>
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: c.muted }}>{t("demoPick")}</Text>
+                <CredRow label={t("sbxUser")} value={u.email} done={copied === u.id} onCopy={() => copy(u.id, u.email)} />
+                {sandboxPassword ? <CredRow label={t("sbxPass")} value={sandboxPassword} done={copied === "pw-" + u.id} onCopy={() => copy("pw-" + u.id, sandboxPassword)} /> : null}
+              </View>
+            ))}
+          </View>
+        </Dialog>
+        <Dialog visible={showDemo && demoUsers.length > 0} title={t("demoPick")} onClose={() => setShowDemo(false)}>
           <View style={{ borderTopWidth: 1, borderColor: c.line }}>
             {demoUsers.map((u) => (
               <Pressable
@@ -232,7 +210,7 @@ export default function Welcome() {
                 accessibilityRole="button"
                 accessibilityLabel={`${t("enterAs")} ${u.name}`}
                 accessibilityState={{ busy: busy === u.id }}
-                onPress={() => login(u.id, () => loginAsDemo(u.id))}
+                onPress={() => { setShowDemo(false); login(u.id, () => loginAsDemo(u.id)); }}
                 style={({ hovered, pressed }: any) => ({
                   flexDirection: "row",
                   alignItems: "center",
@@ -250,11 +228,22 @@ export default function Welcome() {
                   <Text style={{ fontFamily: fonts.bodyBold, fontSize: 16.5, color: c.ink }}>{u.name}</Text>
                   {DEMO_HINT[u.name] ? <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: c.muted }}>{t(DEMO_HINT[u.name])}</Text> : null}
                 </View>
-                {busy === u.id ? <Text style={{ color: c.muted, fontFamily: fonts.bodyBold }}>…</Text> : null}
               </Pressable>
             ))}
           </View>
-        </Animated.View>
+        </Dialog>
+      </View>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <PayPalChip />
+        <Text style={{ flex: 1, minWidth: 180, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.muted }}>{t("ppFlow")}</Text>
+      </View>
+      {error && (
+        <View accessibilityRole="alert" style={{ gap: space(2), borderLeftWidth: 4, borderColor: c.rojo.fill, backgroundColor: c.surface, padding: space(4) }}>
+          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, lineHeight: 22, color: c.rojo.text }}>{t(error)}</Text>
+          <Pressable accessibilityRole="button" onPress={() => { setError(null); setAttempt((n) => n + 1); }} style={{ minHeight: 44, justifyContent: "center" }}>
+            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15.5, color: c.ink, textDecorationLine: "underline" }}>{t("retry")}</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );

@@ -330,7 +330,7 @@ async function compose(user: User, groupId: string, g: Awaited<ReturnType<typeof
           "the debt, how late it is, whether a PayPal invoice already went out. Prefer the gentlest step that works: a reminder before an " +
           "invoice for someone with a good history; the invoice when reminders did not work or the history is weak. Do not recommend every " +
           "step, only what is worth doing now. Never shame anyone and never mention age, gender, origin or anything personal. " +
-          "Use only numbers that appear in the data; do not compute new ones. Plain text, no markdown, no emojis. " +
+          "Use only numbers that appear in the data; do not compute new ones. Amounts are US dollars: write them like $42.00. Plain text, no markdown, no emojis. " +
           (g.organizer ? "" : "The person is a member, not the organizer: say nothing about other members beyond who has paid and who is missing. ") +
           `Write in ${g.en ? "English" : "Spanish (Latin American)"}, addressing the person directly.`,
         messages: [{ role: "user", content: source }],
@@ -361,7 +361,7 @@ async function compose(user: User, groupId: string, g: Awaited<ReturnType<typeof
     groupId,
     kind: "briefing",
     source: out.source,
-    subject: `Lectura del grupo para ${user.name}: ${out.health}`,
+    subject: `${user.name} · ${out.health}`,
     consulted: g.candidates.map((x) => ({ tool: x.key, input: x.facts })),
     output: [out.headline, ...out.items.map((i, n) => `${n + 1}. ${i.title}. ${i.why}`)].join("\n"),
     // it reads one person's situation: for them and the organizer only
