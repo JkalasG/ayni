@@ -44,7 +44,7 @@ export async function groupGuarantee(user: User, groupId: string) {
     group: { id: group.id, name: group.name, startsAt: group.startsAt, endsAt: rounds.length ? rounds[rounds.length - 1].dueAt : null, status: group.status },
     isOrganizer,
     myMembershipId: me.id,
-    members: visible.map((m) => ({ id: m.id, name: m.user.name, turn: m.turn, heldCents: m.retentionHeldCents })),
+    members: visible.map((m) => ({ id: m.id, userId: m.userId, name: m.user.name, turn: m.turn, heldCents: m.retentionHeldCents })),
     items,
     now: new Date().toISOString(),
   };

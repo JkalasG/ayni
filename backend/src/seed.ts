@@ -9,6 +9,8 @@
  * Creates:
  *  - a FINISHED past pasanaku, so trust profiles have real history (some late payments, one covered by guarantee)
  *  - "Pasanaku del barrio": 5 members, demo mode (4-minute rounds), AI turn order — the main demo
+ *  - "Pasanaku de los comerciantes" (COMERC): an ACTIVE group written straight into the database with one of every
+ *      case, so the calendar, turn and guarantee charts have something to show (see activeGroup below).
  *  - "Pasanaku abierto de la feria": an OPEN group with admission rules.
  *      Tomás is borderline (75% on time, rule is 80%) -> the AI recommends, the organizer decides.
  *      Kusi has no history -> newcomer: accepted, second-half turn and extra guarantee.
@@ -79,6 +81,9 @@ async function main() {
     });
     console.log('Demo group "Pasanaku del barrio" created. Invite code: BARRIO');
   }
+
+  // ---------------------------------------------------------- group in progress, for the charts
+  await activeGroup([rosa, juan, marisol, efrain, wara]);
 
   // ---------------------------------------------------------- open group
   const open = await db.group.findUnique({ where: { inviteCode: "ABIERT" } });
@@ -178,6 +183,115 @@ async function main() {
 }
 
 type Outcome = "onTime" | "late" | "covered";
+
+/**
+ * A pasanaku in progress with every case the charts draw. Written straight into the database (no PayPal), dated from
+ * now, so it looks the same whenever it is seeded:
+ *
+ *   round 1  Juan receives   all paid on time; his guarantee (25 %) is withheld from the pot
+ *   round 2  Marisol         Efrain paid a day late (late fee); Marisol's guarantee (10 %) is withheld
+ *   round 3  Wara            Juan did not pay and his guarantee covered it. Marisol did not pay and her guarantee
+ *                            was not enough, so the group closed it unpaid (part recovered). Wara's guarantee (5 %)
+ *   round 4  Rosa (now)      due yesterday: Rosa, Juan and Wara paid; Marisol and Efrain are LATE
+ *   round 5  Efrain          still to come
+ *
+ * Tomas and Kusi are not in it, so their admission cases (borderline, newcomer) stay as they are. The engine sees the
+ * late contributions as already reminded (stage "due") and the grace period is a year long, so it does nothing to
+ * them: no invoices, no automatic cover. Safe to run more than once.
+ */
+async function activeGroup(users: { id: string }[]) {
+  if (await db.group.findUnique({ where: { inviteCode: "COMERC" } })) return;
+  const [rosa, juan, marisol, efrain, wara] = users;
+  const AMOUNT = 4000;
+  const FEE = 200; // 5 %
+  const dueAt = (round: number) => new Date(Date.now() + (round - 4) * 7 * DAY - DAY); // round 4 was due yesterday
+  const hours = (d: Date, h: number) => new Date(d.getTime() + h * 3_600_000);
+
+  const group = await db.group.create({
+    data: {
+      name: "Pasanaku de los comerciantes",
+      inviteCode: "COMERC",
+      organizerId: rosa.id,
+      contributionCents: AMOUNT,
+      frequency: "WEEKLY",
+      orderMethod: "LOTTERY",
+      maxMembers: 5,
+      lateFeePct: 5,
+      maxRetentionPct: 25,
+      graceHours: 8760,
+      approvalTimeoutHours: 8760,
+      status: "ACTIVE",
+      startsAt: new Date(dueAt(1).getTime() - 7 * DAY),
+      createdAt: new Date(dueAt(1).getTime() - 14 * DAY),
+    },
+  });
+
+  // turn order and what each one still has withheld right now
+  const seats = [
+    { user: juan, retentionPct: 25, held: 800, risk: 20 }, // 5000 withheld, 4200 used to cover round 3
+    { user: marisol, retentionPct: 10, held: 0, risk: 45 }, // 2020 withheld, all of it recovered in round 3
+    { user: wara, retentionPct: 5, held: 911, risk: 30 },
+    { user: rosa, retentionPct: 5, held: 0, risk: 10 },
+    { user: efrain, retentionPct: 0, held: 0, risk: 40 },
+  ];
+  const m: Record<string, string> = {};
+  for (let i = 0; i < seats.length; i++) {
+    const row = await db.membership.create({
+      data: { userId: seats[i].user.id, groupId: group.id, turn: i + 1, retentionPct: seats[i].retentionPct, retentionHeldCents: seats[i].held, riskScore: seats[i].risk },
+    });
+    m[seats[i].user.id] = row.id;
+  }
+
+  type Plan = { status: "PAID" | "COVERED" | "DEFAULTED" | "PENDING"; lateDays?: number; recovered?: number };
+  const paid: Plan = { status: "PAID" };
+  const plans: Record<number, Record<string, Plan>> = {
+    1: { [rosa.id]: paid, [juan.id]: paid, [marisol.id]: paid, [efrain.id]: paid, [wara.id]: paid },
+    2: { [rosa.id]: paid, [juan.id]: paid, [marisol.id]: paid, [efrain.id]: { status: "PAID", lateDays: 1 }, [wara.id]: paid },
+    3: { [rosa.id]: paid, [juan.id]: { status: "COVERED", lateDays: 2 }, [marisol.id]: { status: "DEFAULTED", recovered: 2020 }, [efrain.id]: paid, [wara.id]: paid },
+    4: { [rosa.id]: paid, [juan.id]: paid, [marisol.id]: { status: "PENDING" }, [efrain.id]: { status: "PENDING" }, [wara.id]: paid },
+    5: {},
+  };
+  const roundStatus = { 1: "PAID_OUT", 2: "PAID_OUT", 3: "PAID_OUT", 4: "COLLECTING", 5: "UPCOMING" } as const;
+  const recipient = [juan, marisol, wara, rosa, efrain];
+  const retained: Record<number, number> = { 1: 5000, 2: 2020, 3: 911 }; // withheld from that round's pot
+  const potSent: Record<number, number> = { 1: 15000, 2: 18180, 3: 17309 }; // what reached the recipient
+
+  for (let r = 1; r <= 5; r++) {
+    const due = dueAt(r);
+    const round = await db.round.create({
+      data: {
+        groupId: group.id,
+        number: r,
+        recipientId: m[recipient[r - 1].id],
+        dueAt: due,
+        status: roundStatus[r as 1 | 2 | 3 | 4 | 5],
+        ...(retained[r] ? { retainedCents: retained[r], retainedAt: hours(due, 2) } : {}),
+      },
+    });
+    for (const u of users) {
+      const plan = plans[r][u.id] ?? { status: "PENDING" as const };
+      const overdueNow = plan.status === "PENDING" && r === 4; // pending and past due: late, already reminded
+      const fee = plan.lateDays || plan.status === "COVERED" || plan.status === "DEFAULTED" || overdueNow ? FEE : 0;
+      await db.contribution.create({
+        data: {
+          roundId: round.id,
+          membershipId: m[u.id],
+          amountCents: AMOUNT,
+          lateFeeCents: fee,
+          status: plan.status,
+          recoveredCents: plan.recovered ?? 0,
+          paidAt: plan.status === "PENDING" || plan.status === "DEFAULTED" ? null : plan.status === "COVERED" ? hours(due, 49) : new Date(due.getTime() + (plan.lateDays ?? -1) * DAY),
+          // "due" stage already handled: the engine leaves these alone
+          remindersSent: overdueNow ? 2 : 0,
+        },
+      });
+    }
+    if (potSent[r]) {
+      await db.payout.create({ data: { roundId: round.id, membershipId: m[recipient[r - 1].id], kind: "POT", amountCents: potSent[r], status: "SENT", createdAt: hours(due, 2) } });
+    }
+  }
+  console.log('Group in progress "Pasanaku de los comerciantes" created (code COMERC): paid, late, covered, closed, guarantee held and used.');
+}
 
 /** A finished pasanaku in the past, with every round paid out. */
 async function pastGroup(code: string, name: string, organizerId: string, memberIds: string[], outcome: (m: string, r: number) => Outcome) {

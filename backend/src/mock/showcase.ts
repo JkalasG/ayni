@@ -129,6 +129,8 @@ function printHelp() {
       · Marisol    → organizer of the open circle: Tomás's request with the AI recommendation
       · Tomás/Kusi → "Explorar pasanakus abiertos" and "Mi perfil de confianza"
       · Doña Rosa  → "Pasanaku del barrio" (code BARRIO) to play a full cycle with 4-minute rounds
+      · Doña Rosa  → "Pasanaku de los comerciantes" (COMERC): paid, late, covered and closed contributions, guarantee held and used
+        (Marisol and Efraín are late in it; Juan was covered by his guarantee; log in as any of them to see their own view)
    Simulated PayPal panel: ${config.paypal.webBase}/
    Start over: npm run mock:reset
 `);

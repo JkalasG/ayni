@@ -24,9 +24,22 @@ export async function prepareMockEnv() {
   const env = { ...process.env };
   execSync("npx prisma db push --skip-generate", { cwd: ROOT, env, stdio: "ignore" });
 
+  // The Prisma client in node_modules is generated from the schema. After a schema change (a pull, a new field) it
+  // must be generated again, or every query that touches the new parts fails and the screens never load.
+  const schema = path.join(ROOT, "prisma", "schema.prisma");
+  const generated = path.join(ROOT, "node_modules", ".prisma", "client", "schema.prisma");
+  if (!fs.existsSync(generated) || fs.statSync(generated).mtimeMs < fs.statSync(schema).mtimeMs) {
+    console.log("   the data model changed: generating the database client…");
+    try {
+      execSync("npx prisma generate", { cwd: ROOT, env, stdio: "ignore" });
+    } catch {
+      console.error("   could not generate the database client. Stop every other backend process and run `npx prisma generate` in backend/.");
+    }
+  }
+
   const { db } = await import("../db");
   // the seed is idempotent: it also runs when a newer version added demo data (the groups abroad)
-  if ((await db.user.count()) === 0 || !(await db.group.findUnique({ where: { inviteCode: "MADRID" } }))) {
+  if ((await db.user.count()) === 0 || !(await db.group.findUnique({ where: { inviteCode: "MADRID" } })) || !(await db.group.findUnique({ where: { inviteCode: "COMERC" } }))) {
     console.log("   seeding demo data…");
     execSync("npx tsx src/seed.ts", { cwd: ROOT, env, stdio: "inherit" });
   }
