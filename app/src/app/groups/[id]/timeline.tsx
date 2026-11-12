@@ -7,6 +7,8 @@ import { View } from "react-native";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Badge, Button, Card, H2, Loading, Notice, P, Screen } from "@/components/ui";
 import { TurnTimeline } from "@/components/turn-timeline";
+import { Legend } from "@/components/legend";
+import { ROUND_HUE } from "@/lib/sched-colors";
 import type { TimelineMember, TimelineRound } from "@/components/turn-timeline-types";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useScheme } from "@/lib/scheme";
@@ -19,8 +21,8 @@ type Group = {
   startsAt: string | null;
   isOrganizer: boolean;
   myMembershipId: string;
-  memberships: { id: string; turn: number | null; user: { name: string } }[];
-  rounds: TimelineRound[];
+  memberships: { id: string; turn: number | null; user: { id: string; name: string } }[];
+  rounds: (TimelineRound & { contributions: { status: string }[] })[];
   actions: { id: string; type: string; summary: string; payload: { reason?: string; noAuto?: boolean } }[];
 };
 
@@ -52,7 +54,7 @@ export default function Timeline() {
 
   const title = <Stack.Screen options={{ title: t("timeline") }} />;
   if (failed) return <Screen>{title}<Notice tone="error">{t("loadFailed")}</Notice></Screen>;
-  if (!g) return <Loading />;
+  if (!g) return <>{title}<Loading /></>;
 
   const fail = (e: unknown) => {
     const code = e instanceof ApiError ? e.code : "";
@@ -83,7 +85,7 @@ export default function Timeline() {
     }
   };
 
-  const members: TimelineMember[] = g.memberships.map((m) => ({ id: m.id, name: m.user.name, turn: m.turn }));
+  const members: TimelineMember[] = g.memberships.map((m) => ({ id: m.id, userId: m.user.id, name: m.user.name, turn: m.turn }));
   const proposals = g.isOrganizer ? g.actions.filter((a) => a.type === "SWAP_TURNS") : [];
   const running = g.status === "ACTIVE" || g.status === "FINISHED";
 
@@ -111,7 +113,7 @@ export default function Timeline() {
       ))}
       {running ? (
         <TurnTimeline
-          rounds={g.rounds}
+          rounds={g.rounds.map((r) => ({ ...r, paid: r.contributions.filter((x) => x.status !== "PENDING").length, total: r.contributions.length }))}
           members={members}
           startsAt={g.startsAt}
           myMembershipId={g.myMembershipId}
@@ -121,8 +123,12 @@ export default function Timeline() {
           labels={{
             member: t("members"),
             round: t("round"),
+            turnWord: t("schTurn"),
+            roundOf: (n, total) => `${t("round")} ${n} ${t("of")} ${total}`,
+            toolbar: { now: t("schNow"), search: t("schSearch"), mine: t("schMine") },
             due: t("due"),
             mine: t("you"),
+            shortStatus: { UPCOMING: t("tlUpcoming"), COLLECTING: t("tlCollectingShort"), READY: t("tlReady"), PAID_OUT: t("tlPaidOut") },
             status: { UPCOMING: t("tlUpcoming"), COLLECTING: t("tlCollecting"), READY: t("tlReady"), PAID_OUT: t("tlPaidOut") },
             confirm: (a, b) => `${t("tlConfirm")} ${a} ↔ ${b}?\n\n${t("tlConfirmNote")}`,
             cannotSwap: t("tlCannotSwap"),
@@ -132,7 +138,17 @@ export default function Timeline() {
       ) : (
         <Notice>{t("tlNotStarted")}</Notice>
       )}
-      {running && <P muted>{t("tlLegend")}</P>}
+      {running && (
+        <Legend
+          note={g.isOrganizer && g.status === "ACTIVE" ? t("tlOnlyUpcoming") : undefined}
+          items={[
+            { hue: ROUND_HUE.UPCOMING, label: t("tlUpcoming") },
+            { hue: ROUND_HUE.COLLECTING, label: t("tlCollecting") },
+            { hue: ROUND_HUE.READY, label: t("tlReady") },
+            { hue: ROUND_HUE.PAID_OUT, label: t("tlPaidOut") },
+          ]}
+        />
+      )}
     </Screen>
   );
 }

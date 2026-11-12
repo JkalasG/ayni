@@ -11,7 +11,7 @@ export type GuaranteeItem = {
   round: number | null;
   mine: boolean;
 };
-export type GuaranteeMember = { id: string; name: string; turn: number | null; heldCents: number };
+export type GuaranteeMember = { id: string; userId?: string; name: string; turn: number | null; heldCents: number };
 
 export type GuaranteeProps = {
   items: GuaranteeItem[];
@@ -26,6 +26,9 @@ export type GuaranteeProps = {
   labels: {
     member: string;
     round: string;
+    held: string;
+    turnWord: string;
+    toolbar: { now: string; search: string; mine: string };
     mine: string;
     until: string;
     stillHeld: string;

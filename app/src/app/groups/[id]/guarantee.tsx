@@ -6,6 +6,8 @@ import { useCallback, useState } from "react";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Card, H2, Loading, Notice, P, Screen } from "@/components/ui";
 import { GuaranteeTimeline } from "@/components/guarantee-timeline";
+import { Legend } from "@/components/legend";
+import { GUARANTEE_HUE } from "@/lib/sched-colors";
 import type { GuaranteeItem, GuaranteeMember } from "@/components/guarantee-timeline-types";
 import { useI18n } from "@/lib/i18n";
 import { useScheme } from "@/lib/scheme";
@@ -38,7 +40,7 @@ export default function Guarantee() {
 
   const title = <Stack.Screen options={{ title: t("gtTitle") }} />;
   if (failed) return <Screen>{title}<Notice tone="error">{t("loadFailed")}</Notice></Screen>;
-  if (!d) return <Loading />;
+  if (!d) return <>{title}<Loading /></>;
 
   const held = d.members.reduce((s, m) => s + m.heldCents, 0);
   const hasHeld = d.items.some((i) => i.kind === "HELD");
@@ -54,7 +56,7 @@ export default function Guarantee() {
       </Card>
       {anyFailed && <Notice tone="error">{t("gtNoteFailed")}</Notice>}
       {!hasHeld ? (
-        <Notice>{t("gtEmpty")}</Notice>
+        <Notice>{held > 0 ? t("gtNoDetail") : t("gtEmpty")}</Notice>
       ) : (
         <GuaranteeTimeline
           items={d.items}
@@ -69,6 +71,9 @@ export default function Guarantee() {
           labels={{
             member: t("members"),
             round: t("round"),
+            held: t("schHeld"),
+            turnWord: t("schTurn"),
+            toolbar: { now: t("schNow"), search: t("schSearch"), mine: t("schMine") },
             mine: t("you"),
             until: t("gtUntil"),
             stillHeld: t("gtStillHeld"),
@@ -78,7 +83,17 @@ export default function Guarantee() {
           }}
         />
       )}
-      {hasHeld && <P muted>{t("gtLegend")}</P>}
+      {hasHeld && (
+        <Legend
+          items={[
+            { hue: GUARANTEE_HUE.HELD, label: t("gtHeld") },
+            { hue: GUARANTEE_HUE.USED, label: t("gtUsed") },
+            { hue: GUARANTEE_HUE.RECOVERED, label: t("gtRecovered") },
+            { hue: GUARANTEE_HUE.RETURNED, label: t("gtReturned") },
+            { hue: GUARANTEE_HUE.REFUND, label: t("gtRefund") },
+          ]}
+        />
+      )}
     </Screen>
   );
 }
