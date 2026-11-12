@@ -1,113 +1,30 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Alert, Platform, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
-import { Stack, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
-import { Badge, Button, LinkRow, Loading, Notice, P, Weave } from "@/components/ui";
+import { Button, Loading, Notice, P } from "@/components/ui";
 import { RuleChecklist, TrustCard, type TrustProfile } from "@/components/trust";
 import { Tejido } from "@/components/tejido";
+import { GroupCalendar } from "@/components/group-calendar";
+import { AssistantPanel } from "@/components/assistant-panel";
 import { Confetti, PotCelebration } from "@/components/celebrations";
 import { Icon } from "@/components/icons";
-import { PayPalActivity, PayPalChip, PayPalWordmark, type PPPayout } from "@/components/paypal";
+import { PayPalActivity, PayPalChip, PayPalWordmark } from "@/components/paypal";
 import { StepButton, SteppedBox } from "@/components/stepped";
 import { WovenAvatar } from "@/components/woven-avatar";
 import { Vasija } from "@/components/vasija";
 import { countryName } from "@/lib/countries";
 import { useI18n, type Key } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { useGroup, type Round } from "@/lib/group";
 import { useLayout } from "@/lib/layout";
 import { useScheme } from "@/lib/scheme";
-import { api, ApiError, money } from "@/lib/api";
+import { api, money } from "@/lib/api";
+import { errorText } from "@/lib/errors";
 import { payContribution } from "@/lib/pay";
 import { preloadPayPal } from "@/lib/paypal-sdk";
 import { getFlag, setFlag } from "@/lib/flags";
-import { fonts, space, type Palette } from "@/lib/theme";
-
-type Contribution = {
-  id: string;
-  membershipId: string;
-  // CLOSED = someone else's unpaid contribution, as the group sees it (details are private)
-  status: "PENDING" | "PAID" | "COVERED" | "DEFAULTED" | "CLOSED";
-  amountCents: number;
-  lateFeeCents: number;
-  paidAt?: string | null;
-  paypalCaptureId?: string | null;
-};
-type JoinReq = {
-  id: string;
-  name: string;
-  message: string | null;
-  profile: TrustProfile;
-  failures: string[];
-  meetsRules: boolean;
-  aiRecommendation: "accept" | "reject" | null;
-  aiReason: string | null;
-  depositCents: number;
-};
-type Round = {
-  id: string;
-  number: number;
-  status: "UPCOMING" | "COLLECTING" | "READY" | "PAID_OUT";
-  dueAt: string;
-  recipientId: string;
-  recipient: { user: { name: string } };
-  contributions: Contribution[];
-};
-type Member = {
-  id: string;
-  userId: string;
-  turn: number | null;
-  retentionPct: number;
-  retentionHeldCents: number;
-  isNewcomer: boolean;
-  user: { id: string; name: string; country?: string | null };
-};
-type Action = { id: string; type: string; summary: string; expiresAt: string; payload: any };
-type Group = {
-  id: string;
-  name: string;
-  status: "FORMING" | "ORDERING" | "ACTIVE" | "FINISHED" | "CANCELLED";
-  inviteCode: string;
-  organizerId: string;
-  contributionCents: number;
-  country: string;
-  frequency: string;
-  orderMethod: "LOTTERY" | "AI" | "ORGANIZER";
-  demoMode: boolean;
-  isOpen: boolean;
-  minCompleted: number;
-  minOnTimePct: number;
-  maxLate: number | null;
-  acceptNewcomers: boolean;
-  memberships: Member[];
-  requests: JoinReq[];
-  failedPayouts: { id: string; kind: string; status: "FAILED" | "UNKNOWN"; amountCents: number; name: string }[];
-  failedRefunds: { id: string; amountCents: number; name: string }[];
-  rounds: Round[];
-  actions: Action[];
-  myMembershipId: string;
-  isOrganizer: boolean;
-  potCents: number;
-  payouts: PPPayout[];
-  paypalMode: "live" | "mock";
-  unreadChat: number;
-  autoPay: boolean;
-  hasSavedMethod: boolean;
-};
-
-const statusColor = (c: Palette, s: Group["status"]) =>
-  ({ FORMING: c.naranja.text, ORDERING: c.turquesa.text, ACTIVE: c.verde.text, FINISHED: c.muted, CANCELLED: c.rojo.text })[s];
-
-/** Server error codes the organizer can run into here, in plain words. Anything else shows a generic message. */
-const ERRORS: Record<string, Key> = {
-  group_already_started: "err_group_already_started",
-  already_cancelled: "err_already_cancelled",
-  not_failed: "err_not_failed",
-  paypal_error: "err_paypal_error",
-  organizer_only: "err_organizer_only",
-  platform_balance_low: "err_platform_balance_low",
-  no_saved_method: "err_no_saved_method",
-};
+import { fonts, space } from "@/lib/theme";
 
 /** The pot is the treasure: a solid gold block with dark ink, 10:1 contrast in both modes. */
 const GOLD = "#FFC93C";
@@ -120,13 +37,12 @@ const VASIJA_COLORS = { paid: ["#D4106B", "#0E9A64", "#E06A00", "#5B2BB8", "#C22
 const firstName = (n: string) => n.replace(/^(Doña|Don)\s+/i, "").split(" ")[0];
 
 export default function GroupScreen() {
-  const { id, status } = useLocalSearchParams<{ id: string; status?: string }>();
+  const { status } = useLocalSearchParams<{ status?: string }>();
   const { t, lang } = useI18n();
   const { me } = useAuth();
   const { c } = useScheme();
   const { wide } = useLayout();
-  const insets = useSafeAreaInsets();
-  const [g, setG] = useState<Group | null>(null);
+  const { g, reload: load } = useGroup();
   const [busy, setBusy] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ text: string; tone: "ok" | "error" | "info" } | null>(null);
   const [confetti, setConfetti] = useState(0);
@@ -134,18 +50,6 @@ export default function GroupScreen() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [saveMethod, setSaveMethod] = useState(false);
   const lastMine = useRef<string | null>(null);
-  const load = useCallback(async () => {
-    setG(await api<Group>(`/groups/${id}`));
-  }, [id]);
-
-  useFocusEffect(
-    useCallback(() => {
-      load().catch(() => {});
-      // live updates while the screen is open
-      const timer = setInterval(() => load().catch(() => {}), 5000);
-      return () => clearInterval(timer);
-    }, [load])
-  );
 
   const celebratePayment = useCallback(() => {
     setConfetti((n) => n + 1);
@@ -197,14 +101,14 @@ export default function GroupScreen() {
       await fn();
       await load();
     } catch (e) {
-      const msg = e instanceof ApiError ? (ERRORS[e.code] ? t(ERRORS[e.code]) : e.code) : String(e);
+      const msg = errorText(e, t);
       Platform.OS === "web" ? setBanner({ text: msg, tone: "error" }) : Alert.alert("Ayni", msg);
     } finally {
       setBusy(null);
     }
   };
 
-  if (!g || !me) return <Loading />;
+  if (!me) return <Loading />;
 
   const locale = lang === "en" ? "en-US" : "es-BO";
   const day = (d: string) => new Date(d).toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short" });
@@ -230,61 +134,25 @@ export default function GroupScreen() {
 
   // ------------------------------------------------------------------ blocks
 
-  const sub = `${g.memberships.length} ${t("membersWord")}, ${t(g.frequency as Key).toLowerCase()}, ${money(g.contributionCents)} ${t("perRound")}`;
-
-  const header = (
-    <View style={{ gap: space(3) }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}>
-        {!wide && (
-          <Pressable accessibilityRole="button" accessibilityLabel={t("back")} onPress={() => (router.canGoBack() ? router.back() : router.navigate("/groups"))}>
-            <SteppedBox fill={c.surface} stroke={c.line} step={3} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-              <Icon name="atras" size={18} color={c.ink} />
-            </SteppedBox>
-          </Pressable>
-        )}
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text accessibilityRole="header" numberOfLines={2} style={{ fontFamily: fonts.display, fontSize: wide ? 30 : 19, lineHeight: wide ? 36 : 24, color: c.ink }}>
-            {g.name}
-          </Text>
-          <Text style={{ fontFamily: fonts.body, fontSize: wide ? 16 : 14, color: c.muted }}>{sub}</Text>
-        </View>
-      </View>
-      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-        <Badge text={t(`status_${g.status}` as Key)} color={statusColor(c, g.status)} />
-        {g.isOpen ? <Badge text={t("openBadge")} color={c.turquesa.text} /> : null}
-        {g.demoMode ? <Badge text={t("demoBadge")} color={c.muted} /> : null}
-        {g.isOrganizer ? <Badge text={t("organizer")} color={c.fucsia.text} /> : null}
-      </View>
-    </View>
-  );
-
-  const potAmount = (
-    <Text style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 72 : 54, lineHeight: wide ? 80 : 62, color: GOLD_INK, fontVariant: ["tabular-nums"], letterSpacing: -1 }}>
-      {money(g.potCents)}
-    </Text>
-  );
-
-  /** The pot, with a vessel that fills with threads as each PayPal payment is confirmed. */
-  const potCard = (
-    <SteppedBox fill={GOLD} step={6} style={{ padding: wide ? space(7) : space(5), gap: space(3) }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Icon name="pozo" size={20} color={GOLD_INK} />
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: GOLD_SOFT }}>
-            {current ? `${t("pot")}, ${t("round").toLowerCase()} ${current.number} ${t("of")} ${g.rounds.length}` : t("pot")}
-          </Text>
-        </View>
-        {current && current.status === "COLLECTING" ? (
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: GOLD_ALERT }}>
-            {t("dueShort")} {day(current.dueAt)}
-          </Text>
-        ) : null}
-      </View>
-      {potAmount}
+  /** The pot: a compact gold band, with the vessel that fills as each PayPal payment is confirmed. */
+  const potStrip = (
+    <SteppedBox fill={GOLD} step={5} style={{ padding: wide ? space(5) : space(4) }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: space(4) }}>
-        <View style={{ flex: 1, gap: space(2) }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Icon name="pozo" size={18} color={GOLD_INK} />
+            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: GOLD_SOFT }}>
+              {current ? `${t("pot")} · ${t("round").toLowerCase()} ${current.number} ${t("of")} ${g.rounds.length}` : t("pot")}
+            </Text>
+            {current && current.status === "COLLECTING" ? (
+              <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14.5, color: GOLD_ALERT }}>
+                · {t("dueShort")} {day(current.dueAt)}
+              </Text>
+            ) : null}
+          </View>
+          <Text style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 46 : 36, lineHeight: wide ? 52 : 42, color: GOLD_INK, fontVariant: ["tabular-nums"], letterSpacing: -0.5 }}>{money(g.potCents)}</Text>
           {current ? (
-            <Text style={{ fontFamily: fonts.body, fontSize: 17, color: GOLD_INK }}>
+            <Text style={{ fontFamily: fonts.body, fontSize: 15.5, color: GOLD_INK }}>
               {isMyRound ? (
                 <Text style={{ fontFamily: fonts.bodyBold, color: GOLD_INK, textDecorationLine: "underline" }}>{t("youReceiveThisRound")}</Text>
               ) : (
@@ -294,30 +162,29 @@ export default function GroupScreen() {
               )}
             </Text>
           ) : (
-            <Text style={{ fontFamily: fonts.body, fontSize: 16, color: GOLD_SOFT }}>
+            <Text style={{ fontFamily: fonts.body, fontSize: 15, color: GOLD_SOFT }}>
               {money(g.contributionCents)} {t(`per_${g.frequency}` as Key)}
             </Text>
           )}
           {current && (
-            <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: GOLD_SOFT }}>
+            <Text style={{ fontFamily: fonts.body, fontSize: 14, color: GOLD_SOFT }}>
               {settled} {t("of")} {current.contributions.length} {t("contributionsIn")}
               {missing.length ? `, ${t("missing")} ${joinNames(missing, t("and"))}` : ""}
             </Text>
           )}
+          <View style={{ alignSelf: "flex-start", marginTop: 6 }}>
+            <PayPalChip mode={g.paypalMode} />
+          </View>
         </View>
         {current ? (
           <Vasija
             slots={current.contributions.map((x) => ({ id: x.id, state: x.status === "PENDING" ? "EMPTY" : x.status === "COVERED" ? "COVERED" : "PAID" }))}
-            size={wide ? 150 : 104}
+            size={wide ? 104 : 76}
             ink={GOLD_INK}
             colors={VASIJA_COLORS}
             label={`${t("vasijaLabel")}: ${settled} ${t("of")} ${current.contributions.length} ${t("contributionsIn")}`}
           />
         ) : null}
-      </View>
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", borderTopWidth: 1, borderColor: GOLD_INK + "44", paddingTop: space(3) }}>
-        <PayPalChip mode={g.paypalMode} />
-        <Text style={{ flex: 1, minWidth: 160, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: GOLD_SOFT }}>{t("ppFlow")}</Text>
       </View>
     </SteppedBox>
   );
@@ -430,17 +297,25 @@ export default function GroupScreen() {
     </SteppedBox>
   );
 
-  const weave = g.rounds.length > 0 && (
-    <SteppedBox fill={c.surface} stroke={c.line} step={5} style={{ padding: wide ? space(6) : space(4), gap: space(4) }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>
-          {t("weaveTitle")}
-        </Text>
-        <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted }}>{t("eachThread")}</Text>
+  /** Who pays what in every round. The web has the chart; the native app has no chart engine and keeps the woven grid. */
+  const schedule =
+    g.rounds.length === 0 ? null : (
+      <View style={{ gap: space(3) }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <Text accessibilityRole="header" style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>
+            {Platform.OS === "web" ? t("gnSchedule") : t("weaveTitle")}
+          </Text>
+          <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted, flexShrink: 1 }}>{Platform.OS === "web" ? t("calHint") : t("eachThread")}</Text>
+        </View>
+        {Platform.OS === "web" ? (
+          <GroupCalendar g={g} />
+        ) : (
+          <SteppedBox fill={c.surface} stroke={c.line} step={5} style={{ padding: space(4) }}>
+            <Tejido rounds={g.rounds} members={g.memberships} me={g.myMembershipId} cell={38} onRoundComplete={() => setConfetti((n) => n + 1)} />
+          </SteppedBox>
+        )}
       </View>
-      <Tejido rounds={g.rounds} members={g.memberships} me={g.myMembershipId} cell={wide ? 50 : 38} onRoundComplete={() => setConfetti((n) => n + 1)} />
-    </SteppedBox>
-  );
+    );
 
   const decisions = g.isOrganizer && g.actions.length > 0 && (
     <SteppedBox fill={c.surface} stroke={c.fucsia.fill} step={5} style={{ padding: space(5), gap: space(4) }}>
@@ -572,9 +447,9 @@ export default function GroupScreen() {
   );
 
   const invite = g.status === "FORMING" && (
-    <SteppedBox fill={c.surfaceAlt} step={5} style={{ padding: space(6), gap: space(3), alignItems: "flex-start" }}>
+    <SteppedBox fill={c.surfaceAlt} step={5} style={{ padding: space(4), gap: space(2), alignItems: "flex-start" }}>
       <P bold>{t("inviteShare")}</P>
-      <Text selectable style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 48 : 38, letterSpacing: 8, color: c.ink }}>
+      <Text selectable style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 32 : 28, letterSpacing: 6, color: c.ink }}>
         {g.inviteCode}
       </Text>
       {Platform.OS !== "web" && (
@@ -639,24 +514,6 @@ export default function GroupScreen() {
     />
   ) : null;
 
-  const links = (
-    <View style={{ borderTopWidth: 1, borderColor: c.line }}>
-      <LinkRow
-        title={t("chat")}
-        hint={g.unreadChat > 0 ? `${g.unreadChat} ${t(g.unreadChat === 1 ? "chNewOne" : "chNew")}` : t("chLinkHint")}
-        onPress={() => router.push(`/groups/${g.id}/chat`)}
-      />
-      <LinkRow title={t("payments")} hint={t("paymentsShort")} onPress={() => router.push(`/groups/${g.id}/payments`)} />
-      {(g.status === "ACTIVE" || g.status === "FINISHED") && <LinkRow title={t("timeline")} hint={t("timelineShort")} onPress={() => router.push(`/groups/${g.id}/timeline` as any)} />}
-      {(g.status === "ACTIVE" || g.status === "FINISHED") && <LinkRow title={t("calendar")} hint={t("calendarShort")} onPress={() => router.push(`/groups/${g.id}/calendar` as any)} />}
-      {(g.status === "ACTIVE" || g.status === "FINISHED") && <LinkRow title={t("gtTitle")} hint={t("gtShort")} onPress={() => router.push(`/groups/${g.id}/guarantee` as any)} />}
-      {g.status !== "FORMING" && <LinkRow title={t("claims")} hint={t("claimsShort")} onPress={() => router.push(`/groups/${g.id}/claims`)} />}
-      <LinkRow title={t("aiLog")} hint={t("aiLogShort")} onPress={() => router.push(`/groups/${g.id}/ai-log`)} last={!g.isOrganizer} />
-      {g.isOrganizer && g.status === "FORMING" && <LinkRow title={t("publish")} hint={g.isOpen ? t("isOpenNow") : t("publishHint")} onPress={() => router.push(`/groups/${g.id}/admission`)} />}
-      {g.isOrganizer && g.status !== "FORMING" && <LinkRow title={t("checkDisputes")} hint={t("disputesHint")} onPress={() => router.push(`/groups/${g.id}/disputes`)} last />}
-    </View>
-  );
-
   const roundPot = (r: Round) => r.contributions.reduce((s, x) => s + (x.status === "PAID" || x.status === "COVERED" ? x.amountCents + x.lateFeeCents : 0), 0);
   const overlays = (
     <>
@@ -683,30 +540,32 @@ export default function GroupScreen() {
   if (wide) {
     return (
       <View style={{ flex: 1 }}>
-        {/* the sidebar is the navigation on wide screens: no header bar repeating the name */}
-        <Stack.Screen options={{ title: g.name, headerShown: false }} />
-        <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space(10), paddingBottom: space(16) }}>
-          <View style={{ maxWidth: 1240, width: "100%", alignSelf: "center", gap: space(7) }}>
-            {header}
+        <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space(10), paddingTop: space(6), paddingBottom: space(16) }}>
+          <View style={{ maxWidth: 1240, width: "100%", alignSelf: "center", gap: space(6) }}>
             {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
             {cancelledNote}
+            {g.status !== "CANCELLED" && <AssistantPanel onPay={pay} />}
+            {/* the pot and what I owe, side by side: the two things that matter first */}
+            <View style={{ flexDirection: "row", gap: space(6), alignItems: "flex-start" }}>
+              <View style={{ flex: 1, minWidth: 0 }}>{potStrip}</View>
+              {payPanel || autoPayCard ? (
+                <View style={{ width: 380, gap: space(4) }}>
+                  {payPanel}
+                  {autoPayCard}
+                </View>
+              ) : null}
+            </View>
+            {decisions}
+            {failed}
+            {failedRefunds}
+            {schedule}
             <View style={{ flexDirection: "row", gap: space(8), alignItems: "flex-start" }}>
-              <View style={{ flex: 1, gap: space(7), minWidth: 0 }}>
-                {potCard}
-                {weave}
+              <View style={{ flex: 1, gap: space(6), minWidth: 0 }}>
                 {invite}
                 {members}
                 {controls}
               </View>
-              <View style={{ width: 380, gap: space(6) }}>
-                {payPanel}
-                {autoPayCard}
-                {decisions}
-                {failed}
-                {failedRefunds}
-                {paypalPanel}
-                {links}
-              </View>
+              <View style={{ width: 380, gap: space(6) }}>{paypalPanel}</View>
             </View>
           </View>
         </ScrollView>
@@ -717,9 +576,6 @@ export default function GroupScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Stack.Screen options={{ title: g.name, headerShown: false }} />
-      <View style={{ paddingTop: insets.top + space(3), paddingHorizontal: space(4), paddingBottom: space(3), backgroundColor: c.bg, gap: space(3) }}>{header}</View>
-      <Weave cell={3} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: space(4), gap: space(5), paddingBottom: space(8), maxWidth: 640, width: "100%", alignSelf: "center" }}
@@ -727,9 +583,10 @@ export default function GroupScreen() {
       >
         {banner && <Notice tone={banner.tone}>{banner.text}</Notice>}
         {cancelledNote}
-        {potCard}
+        {potStrip}
+        {g.status !== "CANCELLED" && <AssistantPanel onPay={pay} />}
         {decisions}
-        {weave}
+        {schedule}
         {!mustPay && payPanel}
         {autoPayCard}
         {failed}
@@ -738,7 +595,6 @@ export default function GroupScreen() {
         {invite}
         {controls}
         {members}
-        {links}
       </ScrollView>
       {/* phone: the payment stays within reach of the thumb, just above the tab bar */}
       {mustPay && <View style={{ paddingHorizontal: space(3), paddingVertical: space(2), backgroundColor: c.bg, borderTopWidth: 1, borderColor: c.line }}>{payPanel}</View>}
