@@ -18,7 +18,7 @@ export { wovenSvg };
 
 const ASSETS = "/bryntum";
 
-function loadCss(id: string, href: string): Promise<void> {
+export function loadCss(id: string, href: string): Promise<void> {
   return new Promise((resolve) => {
     let link = document.getElementById(id) as HTMLLinkElement | null;
     if (!link) {
@@ -42,14 +42,14 @@ export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", 
 const HUES: SchedHue[] = ["verde", "turquesa", "naranja", "rojo", "amarillo", "fucsia", "muted"];
 export const TEXTURES = ["twill", "threads", "hatch", "dots", "hair"] as const;
 export type Texture = (typeof TEXTURES)[number];
-const SHADES = [100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 2, 1, 0];
+export const SHADES = [100, 99, 98, 97, 96, 95, 94, 93, 92, 91, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 2, 1, 0];
 /** A 2 px step at each corner, like the edge of the cloth (the same shape as SteppedBox, small enough for a bar). */
-const STEPPED =
+export const STEPPED =
   "polygon(4px 0,calc(100% - 4px) 0,calc(100% - 4px) 2px,calc(100% - 2px) 2px,calc(100% - 2px) 4px,100% 4px,100% calc(100% - 4px),calc(100% - 2px) calc(100% - 4px),calc(100% - 2px) calc(100% - 2px),calc(100% - 4px) calc(100% - 2px),calc(100% - 4px) 100%,4px 100%,4px calc(100% - 2px),2px calc(100% - 2px),2px calc(100% - 4px),0 calc(100% - 4px),0 4px,2px 4px,2px 2px,4px 2px)";
 const STEPPED_BIG =
   "polygon(8px 0,calc(100% - 8px) 0,calc(100% - 8px) 4px,calc(100% - 4px) 4px,calc(100% - 4px) 8px,100% 8px,100% calc(100% - 8px),calc(100% - 4px) calc(100% - 8px),calc(100% - 4px) calc(100% - 4px),calc(100% - 8px) calc(100% - 4px),calc(100% - 8px) 100%,8px 100%,8px calc(100% - 4px),4px calc(100% - 4px),4px calc(100% - 8px),0 calc(100% - 8px),0 8px,4px 8px,4px 4px,8px 4px)";
 
-const svgUrl = (w: number, h: number, body: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>${body}</svg>`)}")`;
+export const svgUrl = (w: number, h: number, body: string) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}'>${body}</svg>`)}")`;
 
 /** The woven strip along the bottom edge of a bar. Drawn on the same 3 px stitch grid as the rest of the app. */
 function strip(t: Texture, col: string): string {
@@ -74,7 +74,7 @@ function strip(t: Texture, col: string): string {
  * The whole bar as cloth: the state color is the warp and a weave in darker and lighter stitches covers it, on the same
  * 4 px stitch grid as the avatars. The text sits on a small plate so it stays readable over any weave.
  */
-function field(t: Texture, ink: string): string {
+export function field(t: Texture, ink: string): string {
   const d = (x: number, y: number, o = 0.22) => `<rect x='${x}' y='${y}' width='4' height='4' fill='${ink}' opacity='${o}'/>`;
   const l = (x: number, y: number, o = 0.3) => `<rect x='${x}' y='${y}' width='4' height='4' fill='#fff' opacity='${o}'/>`;
   switch (t) {

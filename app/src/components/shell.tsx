@@ -17,6 +17,7 @@ type GroupRow = { id: string; name: string; status: string };
 const TABS: { key: string; href: string; icon: IconName; label: Key; match: (p: string) => boolean }[] = [
   { key: "groups", href: "/groups", icon: "grupos", label: "tabGroups", match: (p) => p.startsWith("/groups") },
   { key: "explore", href: "/explore", icon: "explorar", label: "tabExplore", match: (p) => p.startsWith("/explore") },
+  { key: "calendar", href: "/calendar", icon: "calendario", label: "tabCalendar", match: (p) => p === "/calendar" },
   { key: "payments", href: "/payments", icon: "pagar", label: "tabPayments", match: (p) => p === "/payments" },
   { key: "passport", href: "/profile", icon: "pasaporte", label: "tabPassport", match: (p) => p.startsWith("/profile") },
   { key: "alerts", href: "/notifications", icon: "avisos", label: "tabAlerts", match: (p) => p.startsWith("/notifications") },
@@ -102,7 +103,7 @@ function TabBar() {
                   </View>
                 ) : null}
               </View>
-              <Text style={{ fontFamily: on ? fonts.bodyBold : fonts.body, fontSize: 12.5, color }}>{t(tab.label)}</Text>
+              <Text numberOfLines={1} style={{ fontFamily: on ? fonts.bodyBold : fonts.body, fontSize: 11.5, color }}>{t(tab.label)}</Text>
               {on ? <View style={{ position: "absolute", top: 0, width: 28, height: 3, backgroundColor: c.fucsia.fill }} /> : null}
             </Pressable>
           );

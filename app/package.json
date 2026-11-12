@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@bryntum/calendar-enterprise": "^8.0.0",
     "@bryntum/scheduler-enterprise": "^8.0.0",
     "@expo-google-fonts/atkinson-hyperlegible": "^0.4.1",
     "@expo-google-fonts/figtree": "^0.4.1",
