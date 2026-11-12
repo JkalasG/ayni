@@ -7,6 +7,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { AguayoBand } from "@/components/aguayo";
 import { Icon } from "@/components/icons";
 import { Controls } from "@/components/controls";
+import { AssistantMock, CalendarMock, ChatMock, CreateMock, MiniSchedule, PayPalWindow, PaymentsMock } from "@/components/demo-parts";
 import { EventRow, PayPalChip, type PPEvent } from "@/components/paypal";
 import { SteppedBox, StepButton } from "@/components/stepped";
 import { Tejido } from "@/components/tejido";
@@ -19,9 +20,15 @@ import { LEVELS } from "@/lib/levels";
 import { useScheme } from "@/lib/scheme";
 import { fonts, space, type ContributionState } from "@/lib/theme";
 
-/** One beat of the story lasts this long. Nine beats, about 40 seconds. */
-const BEAT_MS = 4500;
-const LAST = 8;
+/**
+ * The story: twelve beats, about a minute. It walks through what the app does, in the order a real pasanaku lives it:
+ * an organizer describes it in a sentence, a stranger joins with PayPal in a small window, the AI recommends, everyone
+ * pays from their country, the chat translates, the assistant reads the group, a guarantee covers a failed payment,
+ * the pot arrives and is recorded, and each person's calendar shows what they will have on any day.
+ * Each beat lasts this long; the person can also move by hand (previous, next, or any bar of the progress).
+ */
+const BEAT_MS = 5500;
+const LAST = 11;
 
 const MEMBERS = [
   { id: "m-wara", turn: 1, user: { id: "demo-wara", name: "Wara" } },
@@ -30,20 +37,20 @@ const MEMBERS = [
   { id: "m-efra", turn: 4, user: { id: "demo-efrain", name: "Don Efraín" } },
 ];
 
-/** What the group sees in each beat (the guarantee is masked as "paid" for everyone but Marisol). */
+/** What the group sees in each beat (the guarantee is masked as "paid" for everyone but the organizer). */
 function roundsAt(step: number, forOrganizer: boolean) {
-  const efra: ContributionState = step < 6 ? "PENDING" : forOrganizer ? "COVERED" : "PAID";
+  const efra: ContributionState = step < 8 ? "PENDING" : forOrganizer ? "COVERED" : "PAID";
   const paid = (n: number): ContributionState => (step >= n ? "PAID" : "PENDING");
-  const status = step >= 7 ? "PAID_OUT" : step >= 4 ? "COLLECTING" : "UPCOMING";
+  const status = step >= 9 ? "PAID_OUT" : step >= 5 ? "COLLECTING" : "UPCOMING";
   return [
     {
       number: 1,
       status,
       recipientId: "m-wara",
       contributions: [
-        { membershipId: "m-mari", status: paid(4) },
-        { membershipId: "m-tomas", status: paid(4) },
-        { membershipId: "m-wara", status: paid(4) },
+        { membershipId: "m-mari", status: paid(5) },
+        { membershipId: "m-tomas", status: paid(5) },
+        { membershipId: "m-wara", status: paid(5) },
         { membershipId: "m-efra", status: efra },
       ],
     },
@@ -74,21 +81,21 @@ function Panel({ title, children, sim = true }: { title: string; children: React
 function Note({ icon, text, tone }: { icon: "aprobar" | "garantia" | "pagar" | "rechazar" | "pozo" | "lugar"; text: string; tone: "verde" | "turquesa" | "naranja" | "rojo" | "amarillo" }) {
   const { c } = useScheme();
   return (
-    <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: c[tone].fill + "1F", padding: space(3) }}>
+    <Animated.View entering={FadeInDown.duration(300)} style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", backgroundColor: c[tone].fill + "1F", padding: space(3) }}>
       <Icon name={icon} size={18} color={c[tone].text} />
       <Text style={{ flex: 1, fontFamily: fonts.bodyBold, fontSize: 14.5, lineHeight: 20, color: c[tone].text }}>{text}</Text>
-    </View>
+    </Animated.View>
   );
 }
 
 function PhoneScreen({ step }: { step: number }) {
   const { c } = useScheme();
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [fu, , am, ve, tu] = c.threads;
   const body = (() => {
-    if (step < 0)
-      return <Text style={{ fontFamily: fonts.body, fontSize: 16, lineHeight: 23, color: c.muted }}>{t("demoWait")}</Text>;
-    if (step === 0)
+    if (step < 0) return <Text style={{ fontFamily: fonts.body, fontSize: 16, lineHeight: 23, color: c.muted }}>{t("demoWait")}</Text>;
+    if (step === 0) return <Text style={{ fontFamily: fonts.body, fontSize: 15.5, lineHeight: 23, color: c.muted }}>{t("dPhoneIdle")}</Text>;
+    if (step === 1)
       return (
         <View style={{ gap: space(3) }}>
           <Text style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>{t("dPassport")}</Text>
@@ -112,7 +119,7 @@ function PhoneScreen({ step }: { step: number }) {
           <Note icon="rechazar" tone="naranja" text={t("dNoBank")} />
         </View>
       );
-    if (step <= 2)
+    if (step === 2 || step === 3)
       return (
         <View style={{ gap: space(3) }}>
           <Text style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>{t("dReqSent")}</Text>
@@ -120,14 +127,24 @@ function PhoneScreen({ step }: { step: number }) {
           <Text style={{ fontFamily: fonts.body, fontSize: 15, color: c.muted }}>{t("dReqWait")}</Text>
         </View>
       );
-    if (step === 3)
+    if (step === 4)
       return (
         <Animated.View entering={FadeIn.duration(300)} style={{ gap: space(3) }}>
           <Note icon="aprobar" tone="verde" text={t("dJoined")} />
           <Text style={{ fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: c.muted }}>{t("dJoinedHint")}</Text>
         </Animated.View>
       );
-    if (step <= 6)
+    if (step === 5)
+      return (
+        <View style={{ gap: space(3) }}>
+          <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>{t("dRoundOne")}</Text>
+          <Text style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>{t("dYourShare")}</Text>
+          <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 40, color: c.ink, fontVariant: ["tabular-nums"] }}>{money(1500)}</Text>
+          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, lineHeight: 21, color: c.muted }}>{t("dPopupHint")}</Text>
+        </View>
+      );
+    if (step === 6) return <ChatMock />;
+    if (step <= 8)
       return (
         <View style={{ gap: space(3) }}>
           <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>{t("dRoundOne")}</Text>
@@ -136,7 +153,7 @@ function PhoneScreen({ step }: { step: number }) {
           <Text style={{ fontFamily: fonts.body, fontSize: 13.5, color: c.muted }}>{t("dGroupSees")}</Text>
         </View>
       );
-    if (step === 7)
+    if (step === 9)
       return (
         <Animated.View entering={FadeInDown.duration(400)} style={{ gap: space(3), alignItems: "center", paddingVertical: space(4) }}>
           <PayPalChip label="PayPal" mode="mock" />
@@ -150,6 +167,7 @@ function PhoneScreen({ step }: { step: number }) {
           </View>
         </Animated.View>
       );
+    if (step === 10) return <CalendarMock />;
     return (
       <Animated.View entering={FadeInDown.duration(400)} style={{ gap: space(3), alignItems: "center", paddingVertical: space(3) }}>
         <Text style={{ fontFamily: fonts.bodyBold, fontSize: 14, color: c.fucsia.text }}>{t("dLevelUp")}</Text>
@@ -159,29 +177,34 @@ function PhoneScreen({ step }: { step: number }) {
       </Animated.View>
     );
   })();
-  void lang;
   return (
-    <SteppedBox fill={c.surface} stroke={c.ink} step={8} style={{ padding: space(5), paddingTop: space(6), minHeight: 440, gap: space(3) }}>
-      <View style={{ alignSelf: "center", width: 56, height: 5, backgroundColor: c.line }} />
-      {body}
-    </SteppedBox>
+    <View style={{ position: "relative" }}>
+      <SteppedBox fill={c.surface} stroke={c.ink} step={8} style={{ padding: space(5), paddingTop: space(6), minHeight: 500, gap: space(3) }}>
+        <View style={{ alignSelf: "center", width: 56, height: 5, backgroundColor: c.line }} />
+        {body}
+      </SteppedBox>
+      {/* the small PayPal window opens over the app: the deposit, and each contribution */}
+      {step === 2 ? <PayPalWindow key="dep" amount={1500} label={t("dWinDeposit")} done /> : null}
+      {step === 5 ? <PayPalWindow key="pay" amount={1500} label={t("dWinPay")} done /> : null}
+    </View>
   );
 }
 
 function OrganizerScreen({ step }: { step: number }) {
   const { c } = useScheme();
   const { t } = useI18n();
-  const settled = step >= 6 ? 4 : step >= 4 ? 3 : 0;
+  const settled = step >= 8 ? 4 : step >= 5 ? 3 : 0;
   return (
-    <SteppedBox fill={c.surface} stroke={c.line} step={6} style={{ padding: space(5), minHeight: 440, gap: space(3) }}>
-      {step < 1 && <Text style={{ fontFamily: fonts.body, fontSize: 15, color: c.muted }}>{t("dOrgIdle")}</Text>}
-      {step >= 1 && step < 4 && (
+    <SteppedBox fill={c.surface} stroke={c.line} step={6} style={{ padding: space(5), minHeight: 500, gap: space(3) }}>
+      {step === 0 && <CreateMock />}
+      {step === 1 && <Text style={{ fontFamily: fonts.body, fontSize: 15, color: c.muted }}>{t("dOrgIdle")}</Text>}
+      {step >= 2 && step < 5 && (
         <Animated.View key={step} entering={FadeIn.duration(300)} style={{ gap: space(3) }}>
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
             <WovenAvatar id="demo-wara" name="Wara" size={40} />
             <Text style={{ flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: c.ink }}>{t("dOrgReq")}</Text>
           </View>
-          {step >= 2 && (
+          {step >= 3 && (
             <Animated.View entering={FadeInDown.duration(350)} style={{ borderLeftWidth: 4, borderColor: c.turquesa.fill, backgroundColor: c.turquesa.fill + "1A", padding: space(4), gap: 6 }}>
               <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.turquesa.text }}>{t("dAiTitle")}</Text>
               <Text style={{ fontFamily: fonts.display, fontSize: 18, color: c.ink }}>{t("dAiRec")}</Text>
@@ -189,49 +212,57 @@ function OrganizerScreen({ step }: { step: number }) {
               <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.muted }}>{t("dFinal")}</Text>
             </Animated.View>
           )}
-          {step === 3 && <Note icon="aprobar" tone="verde" text={t("dApproved")} />}
+          {step === 4 && <Note icon="aprobar" tone="verde" text={t("dApproved")} />}
         </Animated.View>
       )}
-      {step >= 4 && (
+      {step >= 5 && (
         <View style={{ gap: space(3) }}>
-          <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>{t("dRoundOne")}</Text>
-          <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 38, color: c.amarillo.text, fontVariant: ["tabular-nums"] }}>{money(6000)}</Text>
-          <View style={{ alignItems: "center" }}>
-            <Vasija
-              slots={[0, 1, 2, 3].map((i) => ({ id: `s${i}`, state: i < settled ? (i === 3 ? "COVERED" : "PAID") : "EMPTY" }))}
-              size={120}
-              animateFirst
-              ink={c.ink}
-              colors={{ paid: [c.verde.fill, c.fucsia.fill, c.naranja.fill], covered: c.turquesa.fill, late: c.rojo.fill, accent: c.surface, empty: c.line }}
-              label={`${t("vasijaLabel")}: ${settled} ${t("of")} 4 ${t("dPaidOf")}`}
-            />
-          </View>
-          <Text style={{ fontFamily: fonts.body, fontSize: 14.5, color: c.muted }}>
-            {settled} {t("of")} 4 {t("dPaidOf")}
-          </Text>
-          {step === 4 && <Note icon="lugar" tone="turquesa" text={t("dCrossBorder")} />}
-          {step === 5 && <Note icon="rechazar" tone="rojo" text={t("dMissing")} />}
-          {step >= 6 && <Note icon="garantia" tone="turquesa" text={t("dGuarUsed")} />}
-          {step >= 7 && <Note icon="pozo" tone="amarillo" text={t("dPotSent")} />}
-          {step >= 8 && <Note icon="aprobar" tone="verde" text={t("dRoundDone")} />}
+          {step === 7 ? (
+            <AssistantMock step={step} />
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: space(3) }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>{t("dRoundOne")}</Text>
+                <Text style={{ fontFamily: fonts.displayHeavy, fontSize: 34, color: c.amarillo.text, fontVariant: ["tabular-nums"] }}>{money(6000)}</Text>
+                <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.muted }}>
+                  {settled} {t("of")} 4 {t("dPaidOf")}
+                </Text>
+              </View>
+              <Vasija
+                slots={[0, 1, 2, 3].map((i) => ({ id: `s${i}`, state: i < settled ? (i === 3 ? "COVERED" : "PAID") : "EMPTY" }))}
+                size={84}
+                animateFirst
+                ink={c.ink}
+                colors={{ paid: [c.verde.fill, c.fucsia.fill, c.naranja.fill], covered: c.turquesa.fill, late: c.rojo.fill, accent: c.surface, empty: c.line }}
+                label={`${t("vasijaLabel")}: ${settled} ${t("of")} 4 ${t("dPaidOf")}`}
+              />
+            </View>
+          )}
+          {step === 9 ? <PaymentsMock /> : <MiniSchedule step={step} />}
+          {step === 5 && <Note icon="lugar" tone="turquesa" text={t("dCrossBorder")} />}
+          {step === 6 && <Note icon="rechazar" tone="rojo" text={t("dMissing")} />}
+          {step >= 8 && <Note icon="garantia" tone="turquesa" text={t("dGuarUsed")} />}
+          {step >= 9 && <Note icon="pozo" tone="amarillo" text={t("dPotSent")} />}
+          {step >= 11 && <Note icon="aprobar" tone="verde" text={t("dRoundDone")} />}
         </View>
       )}
     </SteppedBox>
   );
 }
 
-function useEvents(t: (k: Key) => string): PPEvent[] {
+function useEvents(t: (k: Key) => string): (PPEvent & { step: number })[] {
   return useMemo(
-    () => [
-      { id: "e0", at: 0, step: 0, icon: "paypal", tone: "turquesa", title: t("dEvVerified"), detail: t("dEvVerifiedDetail") },
-      { id: "e1", at: 0, step: 1, icon: "pagar", tone: "amarillo", title: t("dEvAuth"), detail: t("dEvAuthDetail"), amount: 1500, ref: "A91F3C" },
-      { id: "e4a", at: 0, step: 4, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: "Marisol, " + t("round").toLowerCase() + " 1", amount: 1500, ref: "7D20B1" },
-      { id: "e4b", at: 0, step: 4, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: t("dEvFromSpain"), amount: 1500, ref: "C44E09" },
-      { id: "e4c", at: 0, step: 4, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: "Wara, " + t("round").toLowerCase() + " 1", amount: 1500, ref: "A91F3C" },
-      { id: "e5", at: 0, step: 5, icon: "rechazar", tone: "rojo", title: t("dEvDeclined"), detail: t("dEvDeclinedDetail"), amount: 1500 },
-      { id: "e6", at: 0, step: 6, icon: "garantia", tone: "turquesa", title: t("ppGuarantee"), detail: "Don Efraín, " + t("round").toLowerCase() + " 1", amount: 1500 },
-      { id: "e7", at: 0, step: 7, icon: "pozo", tone: "amarillo", title: t("ppPayoutSent"), detail: "Wara, " + t("round").toLowerCase() + " 1", amount: 6000, ref: "BATCH9" },
-    ].map((e, i) => ({ ...e, at: i })) as (PPEvent & { step: number })[],
+    () =>
+      [
+        { id: "e1", step: 1, icon: "paypal", tone: "turquesa", title: t("dEvVerified"), detail: t("dEvVerifiedDetail") },
+        { id: "e2", step: 2, icon: "pagar", tone: "amarillo", title: t("dEvAuth"), detail: t("dEvAuthDetail"), amount: 1500, ref: "A91F3C" },
+        { id: "e5a", step: 5, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: "Marisol, " + t("round").toLowerCase() + " 1", amount: 1500, ref: "7D20B1" },
+        { id: "e5b", step: 5, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: t("dEvFromSpain"), amount: 1500, ref: "C44E09" },
+        { id: "e5c", step: 5, icon: "pagar", tone: "verde", title: t("ppCaptured"), detail: "Wara, " + t("round").toLowerCase() + " 1", amount: 1500, ref: "A91F3C" },
+        { id: "e6", step: 8, icon: "rechazar", tone: "rojo", title: t("dEvDeclined"), detail: t("dEvDeclinedDetail"), amount: 1500 },
+        { id: "e8", step: 8, icon: "garantia", tone: "turquesa", title: t("ppGuarantee"), detail: "Don Efraín, " + t("round").toLowerCase() + " 1", amount: 1500 },
+        { id: "e9", step: 9, icon: "pozo", tone: "amarillo", title: t("ppPayoutSent"), detail: "Wara, " + t("round").toLowerCase() + " 1", amount: 6000, ref: "BATCH9" },
+      ].map((e, i) => ({ ...e, at: i })) as (PPEvent & { step: number })[],
     [t]
   );
 }
@@ -244,7 +275,7 @@ export default function Demo() {
   const [step, setStep] = useState(-1);
   const [playing, setPlaying] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const all = useEvents(t) as (PPEvent & { step: number })[];
+  const all = useEvents(t);
   const events = all.filter((e) => e.step <= step).reverse();
   const locale = lang === "en" ? "en-US" : "es-BO";
   const [fu, na, am, ve, tu] = c.threads;
@@ -270,10 +301,15 @@ export default function Demo() {
     if (finished) setStep(-1);
     setPlaying((p) => (finished ? true : !p));
   };
+  // moving by hand pauses the story: whoever reads at their own pace is not hurried
+  const go = (n: number) => {
+    setPlaying(false);
+    setStep(Math.max(0, Math.min(LAST, n)));
+  };
 
   const feed = (
     <Panel title={t("demoFeed")}>
-      <SteppedBox fill={c.surface} stroke={c.paypal} step={6} style={{ padding: space(4), gap: space(2), minHeight: 440 }}>
+      <SteppedBox fill={c.surface} stroke={c.paypal} step={6} style={{ padding: space(4), gap: space(2), minHeight: 500 }}>
         <PayPalChip mode="mock" label={t("ppConnected")} />
         {events.length === 0 ? (
           <Text style={{ fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: c.muted, paddingTop: space(2) }}>{t("ppEmpty")}</Text>
@@ -286,6 +322,14 @@ export default function Demo() {
         )}
       </SteppedBox>
     </Panel>
+  );
+
+  const nav = (label: string, icon: "atras" | "adelante", onPress: () => void, disabled: boolean) => (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={{ opacity: disabled ? 0.4 : 1 }}>
+      <SteppedBox fill={c.surface} stroke={c.line} step={4} style={{ height: 52, minWidth: 52, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" }}>
+        <Icon name={icon} size={18} color={c.ink} />
+      </SteppedBox>
+    </Pressable>
   );
 
   return (
@@ -308,25 +352,31 @@ export default function Demo() {
             <Text accessibilityRole="header" style={{ fontFamily: fonts.displayHeavy, fontSize: wide ? 44 : 30, lineHeight: wide ? 52 : 38, color: c.ink, letterSpacing: -0.8 }}>
               {t("demoTitle")}
             </Text>
-            <Text style={{ fontFamily: fonts.body, fontSize: 17, lineHeight: 25, color: c.muted, maxWidth: 640 }}>{t("demoSub")}</Text>
+            <Text style={{ fontFamily: fonts.body, fontSize: 17, lineHeight: 25, color: c.muted, maxWidth: 700 }}>{t("demoSub")}</Text>
           </View>
 
           <View style={{ gap: space(4) }}>
-            <View style={{ maxWidth: 420 }}>
-              <StepButton
-                title={playing ? t("demoPause") : finished ? t("demoAgain") : t("demoPlay")}
-                fill={c.fucsia.fill}
-                ink={c.onAction}
-                left={<Icon name={playing ? "rechazar" : "rayo"} size={20} color={c.onAction} />}
-                onPress={play}
-              />
+            <View style={{ flexDirection: "row", gap: space(2), alignItems: "center" }}>
+              {nav(t("demoPrev"), "atras", () => go(step - 1), step <= 0)}
+              <View style={{ flex: 1, maxWidth: 420 }}>
+                <StepButton
+                  title={playing ? t("demoPause") : finished ? t("demoAgain") : t("demoPlay")}
+                  fill={c.fucsia.fill}
+                  ink={c.onAction}
+                  left={<Icon name={playing ? "rechazar" : "rayo"} size={20} color={c.onAction} />}
+                  onPress={play}
+                />
+              </View>
+              {nav(t("demoNext"), "adelante", () => go(step + 1), step >= LAST)}
             </View>
-            <View accessible accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: LAST + 1, now: step + 1 }} style={{ flexDirection: "row", gap: 4 }}>
+            <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: LAST + 1, now: step + 1 }} style={{ flexDirection: "row", gap: 4 }}>
               {Array.from({ length: LAST + 1 }).map((_, i) => (
-                <View key={i} style={{ flex: 1, height: 10, backgroundColor: i <= step ? [fu, na, am, ve, tu][i % 5] : "transparent", borderWidth: i <= step ? 0 : 1.5, borderColor: c.line }} />
+                <Pressable key={i} accessibilityRole="button" accessibilityLabel={`${t("demoStepWord")} ${i + 1}`} onPress={() => go(i)} style={{ flex: 1, paddingVertical: 8 }}>
+                  <View style={{ height: 10, backgroundColor: i <= step ? [fu, na, am, ve, tu][i % 5] : "transparent", borderWidth: i <= step ? 0 : 1.5, borderColor: c.line }} />
+                </Pressable>
               ))}
             </View>
-            <View style={{ minHeight: 64, borderLeftWidth: 4, borderColor: c.fucsia.fill, paddingLeft: space(4), justifyContent: "center" }}>
+            <View style={{ minHeight: 76, borderLeftWidth: 4, borderColor: c.fucsia.fill, paddingLeft: space(4), justifyContent: "center" }}>
               {step >= 0 && (
                 <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.fucsia.text }}>
                   {t("demoStepWord")} {step + 1} / {LAST + 1}
